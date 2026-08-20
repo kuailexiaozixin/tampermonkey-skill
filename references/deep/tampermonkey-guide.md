@@ -53,7 +53,7 @@ Expert guidance for writing Tampermonkey userscripts - browser scripts that modi
 })();
 ```
 
-**TypeScript:** Add `@types/tampermonkey` for full type safety. See [typescript.md](references/typescript.md).
+**TypeScript:** Add `@types/tampermonkey` for full type safety. See [typescript.md](../guide/typescript.md).
 
 ---
 
@@ -70,7 +70,7 @@ Expert guidance for writing Tampermonkey userscripts - browser scripts that modi
 | `@run-at` | Optional | When to inject (default: `document-idle`) | `@run-at document-start` |
 | `@run-in` | Optional | Limit to normal or incognito tabs, or Firefox containers (v5.3+) | `@run-in normal-tabs` |
 
-**For complete header documentation, see:** [header-reference.md](references/header-reference.md)
+**For complete header documentation, see:** [header-reference.md](../guide/header-reference.md)
 
 ---
 
@@ -83,7 +83,7 @@ Expert guidance for writing Tampermonkey userscripts - browser scripts that modi
 // Exclude paths (with @match)   // @exclude https://example.com/admin/*
 ```
 
-**For advanced patterns (regex, @include, specific paths), see:** [url-matching.md](references/url-matching.md)
+**For advanced patterns (regex, @include, specific paths), see:** [url-matching.md](../guide/url-matching.md)
 
 ---
 
@@ -111,7 +111,7 @@ Expert guidance for writing Tampermonkey userscripts - browser scripts that modi
 // @connect *.googleapis.com
 ```
 
-**For complete permissions guide, see:** [header-reference.md](references/header-reference.md)
+**For complete permissions guide, see:** [header-reference.md](../guide/header-reference.md)
 
 ---
 
@@ -129,19 +129,19 @@ Expert guidance for writing Tampermonkey userscripts - browser scripts that modi
 
 ## Common Patterns
 
-These patterns are used frequently. Brief summaries are below - load [patterns.md](references/patterns.md) for full implementations with code examples.
+These patterns are used frequently. Brief summaries are below - load [patterns.md](../guide/patterns.md) for full implementations with code examples.
 
 - **Wait for Element** - Promise-based MutationObserver that resolves when a CSS selector appears in the DOM, with configurable timeout
 - **SPA URL Change Detection** - Detect navigation in single-page apps using `window.onurlchange` grant or History API interception
-- **Cross-Origin Request** - Fetch data from external APIs using `GM_xmlhttpRequest` with `@connect` domain whitelisting. See also [http-requests.md](references/http-requests.md)
-- **Add Custom Styles** - Inject CSS with `GM_addStyle` to restyle pages or hide elements. See also [api-dom-ui.md](references/api-dom-ui.md)
-- **Persistent Settings** - Store user preferences with `GM_setValue`/`GM_getValue` and expose toggle via `GM_registerMenuCommand`. See also [api-storage.md](references/api-storage.md)
+- **Cross-Origin Request** - Fetch data from external APIs using `GM_xmlhttpRequest` with `@connect` domain whitelisting. See also [http-requests.md](../api/http-requests.md)
+- **Add Custom Styles** - Inject CSS with `GM_addStyle` to restyle pages or hide elements. See also [api-dom-ui.md](../api/api-dom-ui.md)
+- **Persistent Settings** - Store user preferences with `GM_setValue`/`GM_getValue` and expose toggle via `GM_registerMenuCommand`. See also [api-storage.md](../api/api-storage.md)
 - **DOM Mutation Observation** - Watch for dynamically added content with MutationObserver (debounced variant included)
 - **Element Manipulation** - Inject HTML, remove/hide elements, replace text across the page
 - **Keyboard Shortcuts** - Simple handlers and a shortcut manager with modifier key support
 - **Data Extraction** - Extract table data to arrays/objects, collect and filter page links
 - **Error Handling** - Safe wrapper for try/catch and async retry with exponential backoff
-- **TypeScript Userscripts** - Type-safe scripts with `@types/tampermonkey`. See [typescript.md](references/typescript.md)
+- **TypeScript Userscripts** - Type-safe scripts with `@types/tampermonkey`. See [typescript.md](../guide/typescript.md)
 
 ---
 
@@ -185,7 +185,7 @@ npm install --save-dev @types/tampermonkey
 })();
 ```
 
-Build with a bundler (esbuild, Vite, webpack) to a single `.user.js` output file. For full project setup including tsconfig and bundler config, see [typescript.md](references/typescript.md).
+Build with a bundler (esbuild, Vite, webpack) to a single `.user.js` output file. For full project setup including tsconfig and bundler config, see [typescript.md](../guide/typescript.md).
 
 ---
 
@@ -200,7 +200,7 @@ Userscripts have limitations:
 - **Bypass all CSP** - Some very strict CSP cannot be bypassed
 - **Inject without permission** - Tampermonkey v5.4.1+ requires users to grant injection permission per-site or globally; scripts cannot bypass this requirement
 
-Most limitations have **workarounds** - see [common-pitfalls.md](references/common-pitfalls.md).
+Most limitations have **workarounds** - see [common-pitfalls.md](../quality/common-pitfalls.md).
 
 ---
 
@@ -242,7 +242,7 @@ Before returning a userscript, verify:
 - [ ] Works in both Chrome and Firefox
 - [ ] Comments explain non-obvious code
 
-**For complete security checklist, see:** [security-checklist.md](references/security-checklist.md)
+**For complete security checklist, see:** [security-checklist.md](../quality/security-checklist.md)
 
 ---
 
@@ -253,24 +253,24 @@ Load these on-demand based on user needs:
 | File | When to Load |
 |------|--------------|
 | **Core** | |
-| [header-reference.md](references/header-reference.md) | Header syntax - all @tags with examples |
-| [url-matching.md](references/url-matching.md) | @match, @include, @exclude patterns |
-| [patterns.md](references/patterns.md) | Common implementation patterns with code |
-| [sandbox-modes.md](references/sandbox-modes.md) | Security/isolation execution contexts |
+| [header-reference.md](../guide/header-reference.md) | Header syntax - all @tags with examples |
+| [url-matching.md](../guide/url-matching.md) | @match, @include, @exclude patterns |
+| [patterns.md](../guide/patterns.md) | Common implementation patterns with code |
+| [sandbox-modes.md](../guide/sandbox-modes.md) | Security/isolation execution contexts |
 | **API** | |
-| [api-sync.md](references/api-sync.md) | GM_* synchronous function reference (callback-based) |
-| [api-async.md](references/api-async.md) | GM.* promise-based API reference - prefer these for new scripts |
-| [api-storage.md](references/api-storage.md) | GM_setValue, GM_getValue, listeners |
-| [http-requests.md](references/http-requests.md) | GM_xmlhttpRequest cross-origin |
-| [web-requests.md](references/web-requests.md) | GM_webRequest interception (Firefox) |
-| [api-cookies.md](references/api-cookies.md) | GM_cookie manipulation |
-| [api-dom-ui.md](references/api-dom-ui.md) | addElement, addStyle, unsafeWindow |
-| [api-tabs.md](references/api-tabs.md) | getTab, saveTab, openInTab |
-| [api-audio.md](references/api-audio.md) | Mute/unmute tabs |
+| [api-sync.md](../api/api-sync.md) | GM_* synchronous function reference (callback-based) |
+| [api-async.md](../api/api-async.md) | GM.* promise-based API reference - prefer these for new scripts |
+| [api-storage.md](../api/api-storage.md) | GM_setValue, GM_getValue, listeners |
+| [http-requests.md](../api/http-requests.md) | GM_xmlhttpRequest cross-origin |
+| [web-requests.md](../api/web-requests.md) | GM_webRequest interception (Firefox) |
+| [api-cookies.md](../api/api-cookies.md) | GM_cookie manipulation |
+| [api-dom-ui.md](../api/api-dom-ui.md) | addElement, addStyle, unsafeWindow |
+| [api-tabs.md](../api/api-tabs.md) | getTab, saveTab, openInTab |
+| [api-audio.md](../api/api-audio.md) | Mute/unmute tabs |
 | **Quality** | |
-| [common-pitfalls.md](references/common-pitfalls.md) | What breaks scripts and workarounds |
-| [debugging.md](references/debugging.md) | How to debug userscripts |
-| [browser-compatibility.md](references/browser-compatibility.md) | Chrome vs Firefox differences |
-| [security-checklist.md](references/security-checklist.md) | Pre-delivery security validation |
-| [version-numbering.md](references/version-numbering.md) | Version string comparison rules |
-| [typescript.md](references/typescript.md) | TypeScript project setup with @types/tampermonkey, bundler config |
+| [common-pitfalls.md](../quality/common-pitfalls.md) | What breaks scripts and workarounds |
+| [debugging.md](../quality/debugging.md) | How to debug userscripts |
+| [browser-compatibility.md](../guide/browser-compatibility.md) | Chrome vs Firefox differences |
+| [security-checklist.md](../quality/security-checklist.md) | Pre-delivery security validation |
+| [version-numbering.md](../guide/version-numbering.md) | Version string comparison rules |
+| [typescript.md](../guide/typescript.md) | TypeScript project setup with @types/tampermonkey, bundler config |

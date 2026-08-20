@@ -17,7 +17,11 @@ tampermonkey/
 ├── examples/
 │   ├── 网页导出.user.js                  # 实战成品：网页导出为干净 Markdown/HTML
 │   └── youtube-timestamp-bookmarker.user.js  # YouTube 时间戳书签示例
-├── references/       # 整合的 API 与主题参考（GM API、元数据、ScriptCat、调试、安全等 22 篇）
+├── references/       # 26 篇参考，按功能分 4 类子目录
+│   ├── api/          # GM API 功能参考（10 篇）：GM.* 异步 / GM_* 同步 / 存储 / Cookie / 标签页 / 音频 / DOM-UI / HTTP / Web 请求 / ScriptCat API
+│   ├── guide/        # 编写指南（8 篇）：元数据块 / 头部标签 / URL 匹配 / 常用模式 / 沙箱 / TypeScript / 跨浏览器 / 版本号
+│   ├── quality/      # 质量与调试（3 篇）：调试清单 / 常见坑 / 安全检查
+│   └── deep/         # 深度参考（5 篇）：四个子技能原始完整文档（ScriptCat 助手 / Tampermonkey 指南 / 开发者工具包 / MCP Server 部署）
 ├── scripts/          # analyze_page / generate-userscript / validate-userscript
 └── templates/        # basic / advanced / spa-compatible 三种脚本模板
 ```
