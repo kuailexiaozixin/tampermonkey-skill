@@ -8,7 +8,7 @@ description: "Tampermonkey / ScriptCat 用户脚本开发全流程统一技能�
 > 覆盖 **脚本猫/油猴脚本开发、Tampermonkey 编写调试、开发测试调试工具、MCP 自动化部署** 四类能力的完整开发流程，统一为**一个入口 + 一条完整工作流**：`需求 → 页面分析 → 编写 → 调试 → 部署 → 优化`。
 >
 > 所有资源文件按用途分布在工作流各步骤中，随用随取：
-> - 参考文档在 `references/`（21 篇）
+> - 参考文档在 `references/`（26 篇，含 5 篇深度参考）
 > - 模板在 `templates/`（3 个）、工具脚本在 `scripts/`（3 个）
 > - 完整示例在 `examples/`（2 个）
 
@@ -17,6 +17,7 @@ description: "Tampermonkey / ScriptCat 用户脚本开发全流程统一技能�
 ### 1. 需求澄清
 
 确认目标网站、要做的功能，并判断是否需要 **ScriptCat 特有功能**（后台脚本、定时任务、Agent API、文件存储）——这些是 Tampermonkey 不兼容的能力，按需查 `references/scriptcat_api.md`（相关代码标注 `// ScriptCat only`）。
+- 需要 ScriptCat 开发助手完整工作流（需求→页面分析→生成→调试）时，读深度参考 `references/scriptcat-dev.md`（含 `==UserScript==` 模板与常见问题排查表）。
 
 ### 2. 页面分析
 
@@ -41,6 +42,7 @@ description: "Tampermonkey / ScriptCat 用户脚本开发全流程统一技能�
 - 可复用代码模式（等待元素、DOM 监听、页面加载检测等）查 `references/patterns.md`。
 - TypeScript 开发（@types/tampermonkey 配置）查 `references/typescript.md`。
 - 跨浏览器（Chrome/Firefox/Edge）兼容查 `references/browser-compatibility.md`。
+- **深度总览**：想通读完整知识体系时，`references/tampermonkey-guide.md`（@grant 速查、@run-at 时机、外部 @require/@resource、交付检查清单）与 `references/developer-toolkit.md`（DOM 最佳实践、等待元素/跨域/设置持久化/样式注入/SPA 检测五大模式、XHR/fetch 拦截与拖拽面板等高级技巧、调试与 Troubleshooting）。
 
 最小模板：
 ```javascript
@@ -81,6 +83,7 @@ tampermonkey-mcp --transport=http --port=4001
 - 部署后用 `tampermonkey_get` 读回校验，刷新页面验证生效。
 
 > 连接码格式 `<base32(port-1024)><auth><echo>`；重启 MCP Server 后连接码变化，需在 Editors 重输一次。
+> 深度参考：MCP 完整架构、鉴权握手协议、6 个工具入参/出参表、实践案例与常见问题（405/未连接/超时/IPv6）见 `references/mcp-server.md`；官方 README（架构图、认证协议时序、curl/stdio 测试命令、Claude Code 配置）见 `references/mcp-server-readme.md`。
 
 ### 6. 优化与发布
 
