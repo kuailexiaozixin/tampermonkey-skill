@@ -8,7 +8,7 @@ description: "Tampermonkey / ScriptCat 用户脚本开发全流程统一技能�
 > 覆盖 **脚本猫/油猴脚本开发、Tampermonkey 编写调试、开发测试调试工具、MCP 自动化部署** 四类能力的完整开发流程，统一为**一个入口 + 一条完整工作流**：`需求 → 页面分析 → 编写 → 调试 → 部署 → 优化`。
 >
 > 所有资源文件按用途分布在工作流各步骤中，随用随取：
-> - 参考文档在 `references/`（7 篇主题聚焦文档，按需读取对应主题）：`gm-api-reference` GM API 大全、`header-reference` 脚本头部、`patterns` 代码模式、`runtime-guide` 运行环境、`typescript` TypeScript、`quality` 质量调试、`mcp-deployment` MCP 部署
+> - 参考文档在 `references/`，按主题文件夹存放，每篇一个子主题、可精确检索：`api/` GM API、`header/` 脚本头部、`patterns/` 代码模式、`runtime/` 运行环境、`quality/` 质量调试、`mcp/` MCP 部署、`typescript.md` TypeScript
 > - 模板在 `templates/`（3 个）、工具脚本在 `scripts/`（3 个）
 > - 完整示例在 `examples/`（2 个）
 
@@ -16,7 +16,7 @@ description: "Tampermonkey / ScriptCat 用户脚本开发全流程统一技能�
 
 ### 1. 需求澄清
 
-确认目标网站、要做的功能，并判断是否需要 **ScriptCat 特有功能**（后台脚本、定时任务、Agent API、文件存储）——这些是 Tampermonkey 不兼容的能力，按需查 `references/gm-api-reference.md` 的 ScriptCat 部分（相关代码标注 `// ScriptCat only`）。
+确认目标网站、要做的功能，并判断是否需要 **ScriptCat 特有功能**（后台脚本、定时任务、Agent API、文件存储）——这些是 Tampermonkey 不兼容的能力，按需查 `references/api/scriptcat-api.md`（相关代码标注 `// ScriptCat only`）。
 
 ### 2. 页面分析
 
@@ -29,16 +29,16 @@ description: "Tampermonkey / ScriptCat 用户脚本开发全流程统一技能�
 - 或用生成器：`bash scripts/generate-userscript.sh <name> <url>` 一键生成结构化脚本。
 
 **写元数据块**（`==UserScript==` 头部）：
-- 字段含义、精细头部标签（@grant/@run-at/@require/@resource 等）、URL 匹配（@match/@include/@exclude）、版本号规则，统一查 `references/header-reference.md`。
+- 字段含义查 `references/header/metadata.md`、精细头部标签（@grant/@run-at/@require/@resource 等）查 `references/header/header-tags.md`、URL 匹配（@match/@include/@exclude）查 `references/header/url-matching.md`、版本号规则查 `references/header/versioning.md`。
 
-**选 API 风格与功能**：
-- 完整 GM API 参考——GM.\* Promise 异步风格与 GM_* 同步风格、存储、Cookie、标签页、音频、DOM 与 UI、网络请求、页面请求拦截、ScriptCat 特有 API 及 ScriptCat 开发助手，统一查 `references/gm-api-reference.md`。
+**选 API 风格与功能**（`references/api/`，按需精确读取）：
+- GM.\* Promise 异步风格 `api/async.md`、GM_* 同步风格 `api/sync.md`、存储 `api/storage.md`、Cookie `api/cookies.md`、标签页 `api/tabs.md`、音频 `api/audio.md`、DOM 与 UI（unsafeWindow/GM_addStyle/GM_addElement/GM_registerMenuCommand/通知）`api/dom-ui.md`、网络请求 GM_xmlhttpRequest `api/http-requests.md`、页面请求拦截 `api/web-requests.md`、ScriptCat 特有 API `api/scriptcat-api.md`。
 
-**运行环境**：
-- 沙箱与安全模型、跨浏览器（Chrome/Firefox/Edge）兼容，查 `references/runtime-guide.md`。
+**运行环境**（`references/runtime/`）：
+- 沙箱与安全模型 `runtime/sandbox.md`、跨浏览器（Chrome/Firefox/Edge）兼容 `runtime/compatibility.md`。
 
-**常用模式与进阶**：
-- 可复用代码模式与高级技巧（等待元素、SPA 导航检测、XHR/fetch 拦截、拖拽面板、快捷键等）查 `references/patterns.md`。
+**常用模式与进阶**（`references/patterns/`）：
+- 可复用代码模式（等待元素、SPA 导航检测等）`patterns/common.md`、高级技巧（XHR/fetch 拦截、拖拽面板、快捷键等）`patterns/advanced.md`。
 - TypeScript 开发（@types/tampermonkey 配置）查 `references/typescript.md`。
 
 最小模板：
@@ -63,7 +63,7 @@ description: "Tampermonkey / ScriptCat 用户脚本开发全流程统一技能�
 ### 4. 调试与测试
 
 - **校验脚本**：`bash scripts/validate-userscript.sh 你的脚本.user.js`，检查必需元数据、@grant 声明、性能反模式、安全问题。
-- **质量与调试**：调试清单、常见坑对照、安全检查清单，统一查 `references/quality.md`。
+- **质量与调试**（`references/quality/`）：调试清单 `quality/debugging.md`、常见坑对照 `quality/pitfalls.md`、安全检查清单 `quality/security.md`。
 
 ### 5. 部署（MCP 自动安装 / 更新）
 
@@ -78,14 +78,14 @@ tampermonkey-mcp --transport=http --port=4001
 - **删除**：`tampermonkey_delete`（需 5.6+）。
 - 部署后用 `tampermonkey_get` 读回校验，刷新页面验证生效。
 
-> MCP 完整架构、鉴权握手协议、6 个工具入参/出参表、连接码管理、curl/stdio 测试命令、实践案例与常见问题，见 `references/mcp-deployment.md`。
+> MCP 完整架构、鉴权握手协议、6 个工具入参/出参表、连接码管理、curl/stdio 测试命令、实践案例与常见问题，见 `references/mcp/deployment.md`。
 
 ### 6. 优化与发布
 
-- **性能**：防抖/节流、事件委托、缓存 DOM 查询、避免同步 XHR，常用模式见 `references/patterns.md`。
-- **安全**：避免 eval、innerHTML 注入不可信内容；GM_xmlhttpRequest 配 @connect；不过度 `@match`，安全清单见 `references/quality.md`。
-- **版本号**：遵循 `@version` 语义化递增（`references/header-reference.md`），供自动更新比较。
-- **兼容性**：多浏览器测试要点见 `references/runtime-guide.md`。
+- **性能**：防抖/节流、事件委托、缓存 DOM 查询、避免同步 XHR，常用模式见 `references/patterns/common.md`。
+- **安全**：避免 eval、innerHTML 注入不可信内容；GM_xmlhttpRequest 配 @connect；不过度 `@match`，安全清单见 `references/quality/security.md`。
+- **版本号**：遵循 `@version` 语义化递增（`references/header/versioning.md`），供自动更新比较。
+- **兼容性**：多浏览器测试要点见 `references/runtime/compatibility.md`。
 - **参考成品**：`examples/网页导出.user.js`（Readability+Turndown 把网页导出为 Markdown/HTML 的实战成品）、`examples/youtube-timestamp-bookmarker.user.js`（YouTube 时间戳书签完整范例）。
 
 ## 编码规范要点

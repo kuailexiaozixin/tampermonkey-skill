@@ -17,14 +17,14 @@ tampermonkey/
 ├── examples/
 │   ├── 网页导出.user.js                  # 实战成品：网页导出为干净 Markdown/HTML
 │   └── youtube-timestamp-bookmarker.user.js  # YouTube 时间戳书签示例
-├── references/       # 7 篇主题聚焦参考文档
-│   ├── gm-api-reference.md  # GM API 大全（GM.* 异步 / GM_* 同步 / 存储 / Cookie / 标签页 / 音频 / DOM-UI / HTTP / Web 请求 / ScriptCat）
-│   ├── header-reference.md  # 脚本头部：元数据块 / 全部 @ 标签 / URL 匹配 / 版本号
-│   ├── patterns.md          # 常用代码模式与高级技巧（等待元素 / SPA / 拦截 / 拖拽面板 / 快捷键）
-│   ├── runtime-guide.md     # 运行环境：沙箱模式 / 跨浏览器兼容
-│   ├── typescript.md        # TypeScript 开发
-│   ├── quality.md           # 质量与调试：调试清单 / 常见坑 / 安全检查
-│   └── mcp-deployment.md    # MCP 部署：架构 / 工具 / 工作流 / 测试
+├── references/       # 按主题文件夹存放，每篇一个子主题、可精确检索
+│   ├── api/          # GM API 参考（11 篇）：async/sync 两风格、storage、cookies、tabs、audio、dom-ui、http-requests、web-requests、scriptcat-api、scriptcat-dev
+│   ├── header/       # 脚本头部（5 篇）：metadata、header-tags、url-matching、versioning、guide 速查
+│   ├── patterns/     # 代码模式（2 篇）：common 常用模式、advanced 高级技巧
+│   ├── runtime/      # 运行环境（2 篇）：sandbox 沙箱、compatibility 跨浏览器
+│   ├── quality/      # 质量与调试（3 篇）：debugging、pitfalls、security
+│   ├── mcp/          # MCP 部署（1 篇）：deployment 架构与工具
+│   └── typescript.md # TypeScript 开发
 ├── scripts/          # analyze_page / generate-userscript / validate-userscript
 └── templates/        # basic / advanced / spa-compatible 三种脚本模板
 ```
