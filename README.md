@@ -1,13 +1,13 @@
 # tampermonkey（油猴 / ScriptCat 用户脚本开发技能）
 
-一个统一的 **Tampermonkey / ScriptCat 用户脚本开发** Agent 技能，由原「油猴」技能的 4 个子技能合并而成：
+一个统一的 **Tampermonkey / ScriptCat 用户脚本开发** Agent 技能，覆盖四个能力模块：
 
 - **scriptcat-dev**（脚本猫/油猴脚本开发助手）
 - **tampermonkey**（Tampermonkey 用户脚本编写与调试）
 - **tampermonkey-developer**（开发测试调试工具包：模板、校验、拦截）
 - **tampermonkey-mcp**（通过 MCP 协议直接读写浏览器 Tampermonkey，自动化部署）
 
-合并后形成**一条完整工作流**：`需求 → 编写 → 调试 → 部署 → 优化`。
+四个模块串成**一条完整工作流**：`需求 → 编写 → 调试 → 部署 → 优化`。
 
 ## 目录结构
 

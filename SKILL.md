@@ -1,11 +1,11 @@
 ---
 name: tampermonkey
-description: "Tampermonkey / ScriptCat 用户脚本开发全流程统一技能（原「油猴」技能合并 4 个子技能而来）。覆盖：用户脚本的编写（GM_* 与 GM.* API、元数据块、TypeScript、跨浏览器兼容）、调试与测试（页面分析、校验脚本、常见坑）、优化（性能、安全）、以及自动化部署（通过 Tampermonkey MCP 直接读写浏览器脚本，免确认页安装/更新/删除）。当用户提到油猴、Tampermonkey、ScriptCat、脚本猫、用户脚本、userscript、GM API、网页自动化脚本、把网页导出为 Markdown 时使用。触发词：油猴、tampermonkey、scriptcat、脚本猫、用户脚本、userscript、GM_registerMenuCommand、GM_xmlhttpRequest、@match、网页导出。"
+description: "Tampermonkey / ScriptCat 用户脚本开发全流程统一技能，覆盖：用户脚本的编写（GM_* 与 GM.* API、元数据块、TypeScript、跨浏览器兼容）、调试与测试（页面分析、校验脚本、常见坑）、优化（性能、安全）、以及自动化部署（通过 Tampermonkey MCP 直接读写浏览器脚本，免确认页安装/更新/删除）。当用户提到油猴、Tampermonkey、ScriptCat、脚本猫、用户脚本、userscript、GM API、网页自动化脚本、把网页导出为 Markdown 时使用。触发词：油猴、tampermonkey、scriptcat、脚本猫、用户脚本、userscript、GM_registerMenuCommand、GM_xmlhttpRequest、@match、网页导出。"
 ---
 
 # Tampermonkey（油猴 / ScriptCat 用户脚本）开发
 
-> 本技能由原「油猴」技能的 **scriptcat-dev / tampermonkey / tampermonkey-developer / tampermonkey-mcp** 四个子技能合并而成，统一为**一个入口 + 一条完整工作流**：`需求 → 编写 → 调试 → 部署 → 优化`。所有参考文档整合在 `references/`，模板与脚本在 `templates/`、`scripts/`。
+> 覆盖 **脚本猫/油猴脚本开发、Tampermonkey 编写调试、开发测试调试工具、MCP 自动化部署** 四类能力的完整开发流程，统一为**一个入口 + 一条完整工作流**：`需求 → 编写 → 调试 → 部署 → 优化`。所有参考文档整合在 `references/`，模板与脚本在 `templates/`、`scripts/`。
 
 ## 资源总览
 

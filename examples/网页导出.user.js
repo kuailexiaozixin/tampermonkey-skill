@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         网页导出 (Export Page to Markdown/HTML)
 // @namespace    https://wps.cn/userscripts/page-export
-// @version      2.5.1
+// @version      2.5.3
 // @description  在任意页面点击 Tampermonkey 菜单，导出正文为干净 Markdown/HTML。Readability 提取正文+元数据（标题/作者/摘要/站点/时间），keepClasses 保留代码语言与数学公式，Turndown 转换。
 // @author       灵犀
 // @license      MIT
@@ -135,37 +135,77 @@
         return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    // 保存文件：优先用浏览器原生保存对话框（File System Access API，Chrome/Edge），
-    // 否则回退到 Blob + a[download] 静默下载（Firefox/Safari/非安全上下文）。
+    // ---- IndexedDB：持久化记忆上次保存目录（File System Access API 句柄可跨会话复用）----
+    function idxDB() {
+        return new Promise((res, rej) => {
+            const r = indexedDB.open('page-export-fs', 1);
+            r.onupgradeneeded = () => r.result.createObjectStore('kv');
+            r.onsuccess = () => res(r.result);
+            r.onerror = () => rej(r.error);
+        });
+    }
+    async function storeDir(handle) {
+        try {
+            const db = await idxDB();
+            await new Promise((res, rej) => {
+                const tx = db.transaction('kv', 'readwrite');
+                tx.objectStore('kv').put(handle, 'dir');
+                tx.oncomplete = res;
+                tx.onerror = () => rej(tx.error);
+            });
+        } catch (e) { /* 存储失败不影响导出 */ }
+    }
+    async function loadDir() {
+        try {
+            const db = await idxDB();
+            return await new Promise((res) => {
+                const tx = db.transaction('kv', 'readonly');
+                const r = tx.objectStore('kv').get('dir');
+                r.onsuccess = () => res(r.result || null);
+                r.onerror = () => res(null);
+            });
+        } catch (e) { return null; }
+    }
+
+    // 保存文件：唯一路径 = File System Access API（需 Chrome/Edge + HTTPS）。
+    // 优先写入上次记忆的目录（免重复选位置）；无记忆/失效则弹窗选择并记忆。
+    // 不保留 a.download 回退路线（避免路线分叉与死代码）。
     async function downloadFile(filename, content, mime) {
+        if (!window.showSaveFilePicker || !window.isSecureContext) {
+            alert(`${NAME} 原生保存需 Chrome/Edge 且 HTTPS 页面（File System Access API）`);
+            return;
+        }
         const ext = mime.includes('markdown') ? 'md' : 'html';
         const desc = mime.includes('markdown') ? 'Markdown 文档' : 'HTML 文档';
-        if (window.showSaveFilePicker && window.isSecureContext) {
+        // 主路径：用记忆的目录直接写入（免弹窗）
+        const dir = await loadDir();
+        if (dir) {
             try {
-                const handle = await window.showSaveFilePicker({
-                    suggestedName: filename,
-                    types: [{ description: desc, accept: { [mime]: ['.' + ext] } }]
-                });
-                const writable = await handle.createWritable();
-                await writable.write(content);
-                await writable.close();
-                console.log(`${NAME} 已保存：${filename}`);
-                return;
-            } catch (e) {
-                if (e && e.name === 'AbortError') { console.log(`${NAME} 已取消保存`); return; }
-                // 其它错误回退到静默下载
-            }
+                let perm = await dir.queryPermission({ mode: 'readwrite' });
+                if (perm !== 'granted') perm = await dir.requestPermission({ mode: 'readwrite' });
+                if (perm === 'granted') {
+                    const fh = await dir.getFileHandle(filename, { create: true });
+                    const w = await fh.createWritable();
+                    await w.write(content);
+                    await w.close();
+                    console.log(`${NAME} 已保存到上次目录：${filename}`);
+                    return;
+                }
+            } catch (e) { /* 失效/无权限 → 重新选择 */ }
         }
-        const blob = new Blob([content], { type: mime });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
-        console.log(`${NAME} 已导出：${filename}`);
+        // 无记忆/失效：弹窗选择并记忆父目录
+        const handle = await window.showSaveFilePicker({
+            suggestedName: filename,
+            types: [{ description: desc, accept: { [mime]: ['.' + ext] } }]
+        });
+        const writable = await handle.createWritable();
+        await writable.write(content);
+        await writable.close();
+        try {
+            const parent = await handle.getParent();
+            if (parent) await storeDir(parent);
+        } catch (e) { /* getParent 部分浏览器不支持，跳过记忆 */ }
+        console.log(`${NAME} 已保存：${filename}`);
     }
 
     /* ------------------------------------------------------------------ *
