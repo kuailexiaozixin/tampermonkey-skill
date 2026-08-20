@@ -422,3 +422,35 @@ When a script doesn't work:
 [ ] Using async correctly (callbacks/await)?
 [ ] Browser-specific features used correctly?
 ```
+
+---
+
+### 脚本限制（What Tampermonkey Cannot Do）
+
+
+Userscripts have limitations:
+
+- **Access local files** - Cannot read/write files on your computer
+- **Run before page scripts** - In isolated sandbox mode, page scripts run first
+- **Access cross-origin iframes** - Browser security prevents this
+- **Persist across machines** - GM storage is local to each browser
+- **Bypass all CSP** - Some very strict CSP cannot be bypassed
+- **Inject without permission** - Tampermonkey v5.4.1+ requires users to grant injection permission per-site or globally; scripts cannot bypass this requirement
+
+Most limitations have **workarounds** - see [common-pitfalls.md](../quality/common-pitfalls.md).
+
+---
+
+### 生成脚本时的交付内容
+
+
+Always include in your response:
+
+1. **Explanation** - What the script does (1-2 sentences)
+2. **Complete userscript** - Full code with all headers in a code block
+3. **Installation** - "Copy/paste into Tampermonkey dashboard" or "Save as .user.js"
+4. **Customisation points** - What the user can safely modify (selectors, timeouts, etc.)
+5. **Permissions used** - Which @grants and why they're needed
+6. **Browser support** - If Chrome-only, Firefox-only, or universal
+
+---
