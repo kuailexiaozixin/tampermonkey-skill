@@ -1,12 +1,16 @@
-# TypeScript Userscript Development
+# TypeScript 用户脚本开发
+
+> 使用 @types/tampermonkey 编写类型安全用户脚本，含 tsconfig 与打包配置。
+
+## TypeScript Userscript Development
 
 Writing Tampermonkey userscripts in TypeScript with full type safety.
 
 ---
 
-## Setup
+### Setup
 
-### Install Type Definitions
+#### Install Type Definitions
 
 ```bash
 npm install --save-dev @types/tampermonkey
@@ -16,7 +20,7 @@ pnpm add -D @types/tampermonkey
 
 Current version: `@types/tampermonkey@5.0.5` (updated October 2025, maintained on DefinitelyTyped).
 
-### tsconfig.json
+#### tsconfig.json
 
 ```json
 {
@@ -33,11 +37,11 @@ Current version: `@types/tampermonkey@5.0.5` (updated October 2025, maintained o
 
 ---
 
-## Bundler Setup
+### Bundler Setup
 
 Tampermonkey requires a single `.user.js` file. Use a bundler to compile TypeScript into one output.
 
-### esbuild (recommended - fastest)
+#### esbuild (recommended - fastest)
 
 ```bash
 pnpm add -D esbuild
@@ -53,7 +57,7 @@ pnpm add -D esbuild
 }
 ```
 
-### Vite with vite-plugin-monkey
+#### Vite with vite-plugin-monkey
 
 ```bash
 pnpm add -D vite vite-plugin-monkey
@@ -81,9 +85,9 @@ export default defineConfig({
 
 ---
 
-## Writing TypeScript Userscripts
+### Writing TypeScript Userscripts
 
-### Full Template
+#### Full Template
 
 ```typescript
 // ==UserScript==
@@ -125,7 +129,7 @@ interface ApiResponse {
 }
 ```
 
-### Key Type Definitions
+#### Key Type Definitions
 
 ```typescript
 // Script info
@@ -148,7 +152,7 @@ GM.notification(details: Tampermonkey.NotificationDetails): Promise<boolean>
 
 ---
 
-## Handling the Userscript Header in TypeScript
+### Handling the Userscript Header in TypeScript
 
 The `// ==UserScript==` block must appear in the final compiled output. With most bundlers, put it as a comment at the top of your entry file - esbuild and Vite preserve leading comments.
 
@@ -156,9 +160,9 @@ Alternatively, use `vite-plugin-monkey` or `webpack-tampermonkey` which inject t
 
 ---
 
-## Common TypeScript Patterns
+### Common TypeScript Patterns
 
-### Type-Safe Settings Object
+#### Type-Safe Settings Object
 
 ```typescript
 interface Settings {
@@ -177,7 +181,7 @@ const defaultSettings: Settings = {
 const settings = await GM.getValues<Settings>(defaultSettings);
 ```
 
-### Type-Safe Cross-Origin Fetch
+#### Type-Safe Cross-Origin Fetch
 
 ```typescript
 async function fetchJson<T>(url: string): Promise<T> {
@@ -198,7 +202,7 @@ const user = await fetchJson<User>('https://api.example.com/user/1');
 console.log(user.name);
 ```
 
-### DOM Utilities with Types
+#### DOM Utilities with Types
 
 ```typescript
 function waitForElement<T extends Element>(selector: string, timeout = 10000): Promise<T> {
@@ -229,7 +233,7 @@ button.click();
 
 ---
 
-## Notes
+### Notes
 
 - The `@types/tampermonkey` package covers both GM_* and GM.* APIs
 - `GM_info` is typed as `Tampermonkey.ScriptInfo` and available without `@grant`
