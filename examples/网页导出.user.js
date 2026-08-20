@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         网页导出 (Export Page to Markdown/HTML)
 // @namespace    https://wps.cn/userscripts/page-export
-// @version      2.5.0
+// @version      2.5.1
 // @description  在任意页面点击 Tampermonkey 菜单，导出正文为干净 Markdown/HTML。Readability 提取正文+元数据（标题/作者/摘要/站点/时间），keepClasses 保留代码语言与数学公式，Turndown 转换。
 // @author       灵犀
 // @license      MIT
@@ -135,7 +135,27 @@
         return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    function downloadFile(filename, content, mime) {
+    // 保存文件：优先用浏览器原生保存对话框（File System Access API，Chrome/Edge），
+    // 否则回退到 Blob + a[download] 静默下载（Firefox/Safari/非安全上下文）。
+    async function downloadFile(filename, content, mime) {
+        const ext = mime.includes('markdown') ? 'md' : 'html';
+        const desc = mime.includes('markdown') ? 'Markdown 文档' : 'HTML 文档';
+        if (window.showSaveFilePicker && window.isSecureContext) {
+            try {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: filename,
+                    types: [{ description: desc, accept: { [mime]: ['.' + ext] } }]
+                });
+                const writable = await handle.createWritable();
+                await writable.write(content);
+                await writable.close();
+                console.log(`${NAME} 已保存：${filename}`);
+                return;
+            } catch (e) {
+                if (e && e.name === 'AbortError') { console.log(`${NAME} 已取消保存`); return; }
+                // 其它错误回退到静默下载
+            }
+        }
         const blob = new Blob([content], { type: mime });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
