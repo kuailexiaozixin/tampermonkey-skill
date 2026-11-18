@@ -1,0 +1,18 @@
+# Store every tracked file byte-for-byte: no EOL conversion, no keyword expansion.
+# 两条理由：
+# 1) references/guide/ 与 vendor/ 必须与上游 blob SHA 逐字节一致（跟踪机制靠 blob 比对），
+#    任何 text=auto 归一都会制造"内容没变但哈希变了"的伪漂移。
+# 2) 自研文档在 HEAD 里本就是 CRLF，不做二次归一以免整库重规范化。
+* -text
+
+# 媒体文件按二进制处理（diff 不展开）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.mp4 binary
+*.tgz binary

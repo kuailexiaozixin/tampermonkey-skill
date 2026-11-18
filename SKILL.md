@@ -9,8 +9,10 @@ description: "Tampermonkey / ScriptCat 用户脚本开发全流程统一技能�
 >
 > 所有资源文件按用途分布在工作流各步骤中，随用随取：
 > - 参考文档在 `references/`，按主题文件夹存放，每篇一个子主题、可精确检索：`api/` GM API、`header/` 脚本头部、`patterns/` 代码模式、`runtime/` 运行环境、`quality/` 质量调试、`mcp/` MCP 部署、`typescript.md` TypeScript
-> - 模板在 `templates/`（3 个）、工具脚本在 `scripts/`（3 个）
-> - 完整示例在 `examples/`（2 个）
+> - 模板在 `templates/`（3 个）、工具脚本在 `scripts/`（4 个：analyze_page.js / generate-userscript.sh / validate-userscript.sh / sync_upstream.py）
+> - 完整示例在 `examples/`（1 个）
+> - 教程全量镜像在 `references/guide/`（油猴教程学习指南 95 篇 + 配图，路由索引 `references/guide-index.md`）；TM 与 ScriptCat 的差异判据集中在
+>   `references/runtime/tampermonkey-vs-scriptcat.md`——写跨端脚本前先读这一页
 
 ## 完整工作流
 
@@ -86,13 +88,13 @@ tampermonkey-mcp --transport=http --port=4001
 - **安全**：避免 eval、innerHTML 注入不可信内容；GM_xmlhttpRequest 配 @connect；不过度 `@match`，安全清单见 `references/quality/security.md`。
 - **版本号**：遵循 `@version` 语义化递增（`references/header/versioning.md`），供自动更新比较。
 - **兼容性**：多浏览器测试要点见 `references/runtime/compatibility.md`。
-- **参考成品**：`examples/网页导出.user.js`（Readability+Turndown 把网页导出为 Markdown/HTML 的实战成品）、`examples/youtube-timestamp-bookmarker.user.js`（YouTube 时间戳书签完整范例）。
+- **参考成品**：`examples/网页导出.user.js`（Readability+Turndown 把网页导出为 Markdown/HTML 的实战成品）。
 
 ## 编码规范要点
 
 - **@match**：`*://*.example.com/*` 匹配所有子域；`https://example.com/path/*` 精确前缀；避免 `*://*/*`。
 - **@grant 最小权限**：每个用到的 GM API 单独声明；`@grant none` 无沙箱直接访问页面变量。
-- **@run-at**：`document-start` 最早（拦截/改全局）；`document-end` DOM 就绪（默认）；`document-idle` 完全加载。
+- **@run-at**：`document-start` 最早（拦截/改全局）；`document-end` DOM 就绪；`document-idle` 完全加载——**默认值是 `document-idle`**，TM 与 ScriptCat 一致（判据：TM 的 @types/tampermonkey 注释 "Never null, defaults to document-idle"，ScriptCat 的 `getRunAt()` 对缺省回退 `document_idle`）。
 - **跨域请求**：GM_xmlhttpRequest 必须配 `@connect` 允许域名。
 
 ## 相关

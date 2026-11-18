@@ -15,7 +15,9 @@
 #   - Security concerns
 # ==============================================================================
 
-set -e
+# NOTE: no `set -e` here on purpose. The counters below use
+# `VAR=$((VAR+1))`, but `set -e` + `((VAR++))` aborts the script the first time an
+# increment evaluates to 0, silently skipping every later check.
 
 # Colors
 RED='\033[0;31m'
@@ -48,15 +50,26 @@ echo ""
 # ==============================================================================
 echo -e "${BLUE}[1] Checking required metadata...${NC}"
 
-required_fields=("@name" "@version" "@match")
+required_fields=("@name" "@version")
 for field in "${required_fields[@]}"; do
     if ! grep -q "^// $field" "$SCRIPT_FILE"; then
         echo -e "${RED}✗ Missing required field: $field${NC}"
-        ((ERRORS++))
+        ERRORS=$((ERRORS+1))
     else
         echo -e "${GREEN}✓ Found $field${NC}"
     fi
 done
+
+# @match: required for a page script, not for a ScriptCat background / scheduled
+# script (@background, @crontab) or a context-menu script (@run-at context-menu).
+if grep -qE "^// @match|^// @include" "$SCRIPT_FILE"; then
+    echo -e "${GREEN}✓ Found @match/@include${NC}"
+elif grep -q "^// @background" "$SCRIPT_FILE" || grep -q "^// @crontab" "$SCRIPT_FILE"   || grep -qE "^// @run-at[[:space:]]+context-menu" "$SCRIPT_FILE"; then
+    echo -e "${GREEN}✓ @match not required (background / scheduled / context-menu script)${NC}"
+else
+    echo -e "${RED}✗ Missing required field: @match (a page script needs @match or @include)${NC}"
+    ERRORS=$((ERRORS+1))
+fi
 
 # ==============================================================================
 # Check 2: Grant Declarations
@@ -69,10 +82,9 @@ gm_functions=("GM_setValue" "GM_getValue" "GM_xmlhttpRequest" "GM_addStyle" "GM_
 
 for func in "${gm_functions[@]}"; do
     if grep -q "$func" "$SCRIPT_FILE"; then
-        grant_line="@grant        $func"
-        if ! grep -q "$grant_line" "$SCRIPT_FILE"; then
+        if ! grep -qE "^//[[:space:]]*@grant[[:space:]]+$func([[:space:]]|$)" "$SCRIPT_FILE"; then
             echo -e "${RED}✗ Using $func without @grant declaration${NC}"
-            ((ERRORS++))
+            ERRORS=$((ERRORS+1))
         fi
     fi
 done
@@ -81,7 +93,7 @@ done
 if grep -q "unsafeWindow" "$SCRIPT_FILE"; then
     if ! grep -q "@grant.*unsafeWindow" "$SCRIPT_FILE"; then
         echo -e "${YELLOW}⚠ Using unsafeWindow without @grant declaration${NC}"
-        ((WARNINGS++))
+        WARNINGS=$((WARNINGS+1))
     fi
 fi
 
@@ -96,19 +108,19 @@ echo -e "${BLUE}[3] Checking for performance anti-patterns...${NC}"
 # Check for querySelector in loops
 if grep -E 'for.*querySelector|while.*querySelector' "$SCRIPT_FILE"; then
     echo -e "${YELLOW}⚠ querySelector in loop detected - consider caching results${NC}"
-    ((WARNINGS++))
+    WARNINGS=$((WARNINGS+1))
 fi
 
 # Check for setInterval without clear
 if grep -q "setInterval" "$SCRIPT_FILE" && ! grep -q "clearInterval" "$SCRIPT_FILE"; then
     echo -e "${YELLOW}⚠ setInterval used without clearInterval - potential memory leak${NC}"
-    ((WARNINGS++))
+    WARNINGS=$((WARNINGS+1))
 fi
 
 # Check for addEventListener without cleanup
 if grep -q "addEventListener" "$SCRIPT_FILE" && ! grep -q "removeEventListener" "$SCRIPT_FILE"; then
     echo -e "${YELLOW}⚠ addEventListener used without cleanup - check if removeEventListener needed${NC}"
-    ((WARNINGS++))
+    WARNINGS=$((WARNINGS+1))
 fi
 
 echo -e "${GREEN}✓ Performance check complete${NC}"
@@ -122,19 +134,19 @@ echo -e "${BLUE}[4] Checking for security issues...${NC}"
 # Check for eval
 if grep -q "eval(" "$SCRIPT_FILE"; then
     echo -e "${RED}✗ Using eval() - security risk!${NC}"
-    ((ERRORS++))
+    ERRORS=$((ERRORS+1))
 fi
 
 # Check for innerHTML with variables
 if grep -E '\.innerHTML\s*=.*[\+\$]' "$SCRIPT_FILE"; then
     echo -e "${YELLOW}⚠ Using innerHTML with variables - potential XSS risk${NC}"
-    ((WARNINGS++))
+    WARNINGS=$((WARNINGS+1))
 fi
 
 # Check for document.write
 if grep -q "document.write" "$SCRIPT_FILE"; then
     echo -e "${YELLOW}⚠ Using document.write - can cause issues in modern browsers${NC}"
-    ((WARNINGS++))
+    WARNINGS=$((WARNINGS+1))
 fi
 
 echo -e "${GREEN}✓ Security check complete${NC}"
@@ -148,20 +160,20 @@ echo -e "${BLUE}[5] Checking best practices...${NC}"
 # Check for strict mode
 if ! grep -q "'use strict'" "$SCRIPT_FILE" && ! grep -q '"use strict"' "$SCRIPT_FILE"; then
     echo -e "${YELLOW}⚠ Missing 'use strict' declaration${NC}"
-    ((WARNINGS++))
+    WARNINGS=$((WARNINGS+1))
 fi
 
 # Check for IIFE
-if ! grep -q "(function()" "$SCRIPT_FILE" && ! grep -q "(() => {" "$SCRIPT_FILE"; then
+if ! grep -qE "\(?function[[:space:]]*\(|\(?\)[[:space:]]*=>" "$SCRIPT_FILE"; then
     echo -e "${YELLOW}⚠ Not wrapped in IIFE - may pollute global scope${NC}"
-    ((WARNINGS++))
+    WARNINGS=$((WARNINGS+1))
 fi
 
 # Check for console.log (should be prefixed or removed in production)
 log_count=$(grep -c "console.log" "$SCRIPT_FILE" || true)
 if [ "$log_count" -gt 5 ]; then
     echo -e "${YELLOW}⚠ Found $log_count console.log statements - consider removing or reducing${NC}"
-    ((WARNINGS++))
+    WARNINGS=$((WARNINGS+1))
 fi
 
 echo -e "${GREEN}✓ Best practices check complete${NC}"

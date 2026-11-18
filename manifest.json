@@ -1,0 +1,333 @@
+﻿{
+  "_schema": 1,
+  "_comment": "tampermonkey 技能上游台账（sync_upstream.py 唯一配置源）。三类 source：mirror=本地镜像目录，同步时按上游子路径整体重建；reference=GitHub 仓库快照，同步时只把 vendor_files 命中的文件落进 vendor/<id>/；npm=npm registry 包快照，同样落 vendor/<id>/。anchors 是'自研正文断言 → 上游符号/原文'登记表：每次同步先在新下载内容上验证全部 needle 命中才写回 pinned_sha，防止上游改名后本技能正文悄悄失效。自研文件（SKILL.md、README.md、NOTICE.md、references/guide-index.md、references 中除 guide 镜像外的全部内容、templates、examples、scripts）永不被脚本写入。",
+  "sources": [
+    {
+      "id": "learn-guide-docs",
+      "type": "mirror",
+      "repo": "scriptscat/tampermonkey-learn-guide",
+      "ref": "main",
+      "subpath": "docs",
+      "local_dir": "references/guide",
+      "pinned_sha": "1099b47ae06119e2d340d826b201500faafb85e9",
+      "last_synced": "2026-11-18",
+      "license": "NO-LICENSE-FILE",
+      "note": "95 篇正文 + 配图共 402 文件 / 25 MB，整目录镜像（文本保持上游 LF 字节）。自研路由索引 references/guide-index.md 在镜像之外，不被覆盖。上游无 LICENSE 文件——见 NOTICE.md 许可缺口，权利人决定前保持镜像+注明出处。"
+    },
+    {
+      "id": "scriptcat-userscript-skill",
+      "type": "reference",
+      "repo": "scriptscat/scriptcat",
+      "ref": "main",
+      "subpath": "skills/scriptcat-userscript",
+      "vendor_files": [
+        "skills/scriptcat-userscript/"
+      ],
+      "pinned_sha": "b4148ec86eb9e2287ceb8952f399ec222bb739a9",
+      "last_synced": "2026-11-18",
+      "license": "GPL-3.0",
+      "note": "官方 ScriptCat Agent 技能（SKILL.md + references 5 篇 + scripts/check.mjs，约 110 KB）。GPL-3.0：vendor 只作判据与 diff 对照，不复制正文进自研文件。"
+    },
+    {
+      "id": "scriptcat-src",
+      "type": "reference",
+      "repo": "scriptscat/scriptcat",
+      "ref": "main",
+      "subpath": "src",
+      "vendor_files": [
+        "src/pkg/utils/script.ts",
+        "src/pkg/utils/cron.ts",
+        "src/pkg/utils/script_compat.ts",
+        "src/app/service/sandbox/utils.ts",
+        "src/app/service/content/exec_script.ts",
+        "src/app/service/content/create_context.ts",
+        "src/app/service/content/utils.ts",
+        "src/app/service/content/gm_api/grant.ts",
+        "src/app/service/service_worker/utils.ts",
+        "src/types/scriptcat.d.ts"
+      ],
+      "pinned_sha": "b4148ec86eb9e2287ceb8952f399ec222bb739a9",
+      "last_synced": "2026-11-18",
+      "license": "GPL-3.0",
+      "note": "行为判据的源码面：脚本类型判定（crontab 不依赖 @background）、cron once 语义、grant 别名、沙箱分支、run-at 回退、@inject-into、API 权威声明。只保留 anchors 引用的 10 个文件，整仓库约 18 MB 不落盘。"
+    },
+    {
+      "id": "scriptcat-skills-dev",
+      "type": "reference",
+      "repo": "scriptscat/scriptcat-skills",
+      "ref": "main",
+      "subpath": "scriptcat-dev",
+      "vendor_files": [
+        "scriptcat-dev/"
+      ],
+      "pinned_sha": "e8ad38ca1f61500c5d1fd3cde80a96697d9cd305",
+      "last_synced": "2026-11-18",
+      "license": "NO-LICENSE-FILE",
+      "note": "市场版开发助手（SKILL.cat.md + references 4 篇 + scripts/analyze_page.js，约 64 KB）。scripts/analyze_page.js 与上游逐字节同源（见 NOTICE.md）。"
+    },
+    {
+      "id": "tampermonkey-mcp",
+      "type": "reference",
+      "repo": "Tampermonkey/tampermonkey-mcp",
+      "ref": "main",
+      "subpath": "",
+      "vendor_files": [
+        "README.md",
+        "package.json"
+      ],
+      "pinned_sha": "72a8ae148dea58a1e90b69420c4344cb54b5dfa0",
+      "last_synced": "2026-11-18",
+      "license": "NO-LICENSE-FILE",
+      "note": "tampermonkey_put/delete 的版本要求出处：README 的 'Requires: Tampermonkey Editors 1.0.6+ and Tampermonkey 5.6+'（由 commit d3e60f1b 2026-07-13 加入）。仓库无 LICENSE。"
+    },
+    {
+      "id": "types-tampermonkey",
+      "type": "npm",
+      "package": "@types/tampermonkey",
+      "vendor_files": [
+        "index.d.ts",
+        "package.json"
+      ],
+      "pinned_version": "5.5.0",
+      "pinned_date": "2026-08-20",
+      "last_synced": "2026-11-18",
+      "license": "MIT",
+      "note": "TM 侧 API 类型权威面。run-at 默认值的可核验出处：index.d.ts 中 ScriptInfo 注释 'Never null, defaults to document-idle'。"
+    }
+  ],
+  "anchors": [
+    {
+      "id": "crontab-implies-scheduled-type",
+      "source_id": "scriptcat-src",
+      "file": "src/pkg/utils/script.ts",
+      "needles": [
+        "metadata.crontab !== undefined",
+        "SCRIPT_TYPE_CRONTAB"
+      ],
+      "claims": [
+        "references/api/scriptcat-api.md（@crontab 不需要 @background）",
+        "references/header/metadata.md（@crontab）"
+      ]
+    },
+    {
+      "id": "cron-once-extension",
+      "source_id": "scriptcat-src",
+      "file": "src/pkg/utils/cron.ts",
+      "needles": [
+        "ONCE_MAP",
+        "6位扩展格式会使脚本每秒执行",
+        "并不推荐"
+      ],
+      "claims": [
+        "references/api/scriptcat-api.md（once 语义、5 位推荐）",
+        "references/header/metadata.md（once）"
+      ]
+    },
+    {
+      "id": "once-failed-run-consumes-period",
+      "source_id": "scriptcat-src",
+      "file": "src/app/service/sandbox/utils.ts",
+      "needles": [
+        "isOnceRunDone",
+        "它在运行开始时就写入",
+        "backgroundRunInAllowed"
+      ],
+      "claims": [
+        "references/api/scriptcat-api.md（失败的运行也算已用、@run-in 语义）"
+      ]
+    },
+    {
+      "id": "sandbox-only-when-not-none",
+      "source_id": "scriptcat-src",
+      "file": "src/app/service/content/exec_script.ts",
+      "needles": [
+        "grantSet.has(\"none\")",
+        "createContext"
+      ],
+      "claims": [
+        "references/runtime/tampermonkey-vs-scriptcat.md（无 @grant 行仍进沙箱）",
+        "references/header/metadata.md（@grant 重要）"
+      ]
+    },
+    {
+      "id": "unsafeWindow-and-onurlchange-injection",
+      "source_id": "scriptcat-src",
+      "file": "src/app/service/content/create_context.ts",
+      "needles": [
+        "context.unsafeWindow = window",
+        "window.onurlchange"
+      ],
+      "claims": [
+        "references/runtime/tampermonkey-vs-scriptcat.md（onurlchange 两端都实现、unsafeWindow 注入）"
+      ]
+    },
+    {
+      "id": "context-menu-and-inject-into",
+      "source_id": "scriptcat-src",
+      "file": "src/app/service/content/utils.ts",
+      "needles": [
+        "isContextMenuScript",
+        "isInjectIntoContent",
+        "isEarlyStartScript"
+      ],
+      "claims": [
+        "references/api/scriptcat-api.md（context-menu、@inject-into、@early-start）"
+      ]
+    },
+    {
+      "id": "run-at-default-fallback",
+      "source_id": "scriptcat-src",
+      "file": "src/app/service/service_worker/utils.ts",
+      "needles": [
+        "return \"document_idle\"",
+        "Fallback 至 document_idle"
+      ],
+      "claims": [
+        "references/header/metadata.md（run-at 默认 document-idle）",
+        "SKILL.md 编码规范要点"
+      ]
+    },
+    {
+      "id": "metadata-whitelist-sc-only",
+      "source_id": "scriptcat-src",
+      "file": "src/pkg/utils/script_compat.ts",
+      "needles": [
+        "SUPPORTED_METADATA_TAGS",
+        "SCRIPTCAT_ONLY_METADATA_TAGS",
+        "SUPPORTED_TAG_VALUES",
+        "isScriptCatOnlyGrant"
+      ],
+      "claims": [
+        "references/api/scriptcat-api.md 全部 ScriptCat 专属标签",
+        "references/runtime/tampermonkey-vs-scriptcat.md"
+      ]
+    },
+    {
+      "id": "dts-api-surface",
+      "source_id": "scriptcat-src",
+      "file": "src/types/scriptcat.d.ts",
+      "needles": [
+        "CAT_unregisterMenuInput",
+        "useOpen",
+        "FileStorageError",
+        "\"run-in\": string[]"
+      ],
+      "claims": [
+        "references/api/scriptcat-api.md（menu input 别名、GM_openInTab 选项、fileStorage 错误码、@run-in 类型）"
+      ]
+    },
+    {
+      "id": "grant-candidates-alias",
+      "source_id": "scriptcat-src",
+      "file": "src/app/service/content/gm_api/grant.ts",
+      "needles": [
+        "export function getGrantCandidates"
+      ],
+      "claims": [
+        "references/runtime/tampermonkey-vs-scriptcat.md（GM_foo 与 GM.foo 互为候选）"
+      ]
+    },
+    {
+      "id": "official-skill-key-rules",
+      "source_id": "scriptcat-userscript-skill",
+      "file": "skills/scriptcat-userscript/SKILL.md",
+      "needles": [
+        "no `@grant` line at all, unlike Tampermonkey",
+        "in place of",
+        "no `unsafeWindow`"
+      ],
+      "claims": [
+        "references/runtime/tampermonkey-vs-scriptcat.md 引文",
+        "references/api/scriptcat-api.md（crontab 独立、none 无 unsafeWindow）"
+      ]
+    },
+    {
+      "id": "official-background-once",
+      "source_id": "scriptcat-userscript-skill",
+      "file": "skills/scriptcat-userscript/references/background.md",
+      "needles": [
+        "A run counts when it",
+        "checked every 5"
+      ],
+      "claims": [
+        "references/api/scriptcat-api.md（CATRetryError 5 秒队列、once 起点）"
+      ]
+    },
+    {
+      "id": "official-api-connect-refusal",
+      "source_id": "scriptcat-userscript-skill",
+      "file": "skills/scriptcat-userscript/references/api.md",
+      "needles": [
+        "no `@grant` line",
+        "refused",
+        "anonymous: true"
+      ],
+      "claims": [
+        "references/api/scriptcat-api.md（@connect 拒绝语义、anonymous）"
+      ]
+    },
+    {
+      "id": "official-userconfig-format",
+      "source_id": "scriptcat-userscript-skill",
+      "file": "skills/scriptcat-userscript/references/userconfig.md",
+      "needles": [
+        "==UserConfig==",
+        "mult-select",
+        "bind: $key"
+      ],
+      "claims": [
+        "references/api/scriptcat-api.md（UserConfig 块格式表）"
+      ]
+    },
+    {
+      "id": "check-rules-catalog",
+      "source_id": "scriptcat-userscript-skill",
+      "file": "skills/scriptcat-userscript/scripts/check.mjs",
+      "needles": [
+        "cron-invalid",
+        "grant-missing",
+        "background-no-return"
+      ],
+      "claims": [
+        "references/quality/pitfalls.md 与工具链引用官方检查器规则名"
+      ]
+    },
+    {
+      "id": "analyze-page-same-origin",
+      "source_id": "scriptcat-skills-dev",
+      "file": "scriptcat-dev/scripts/analyze_page.js",
+      "needles": [
+        "SYSTEM_PROMPT",
+        "buildSkeletonScript"
+      ],
+      "claims": [
+        "scripts/analyze_page.js（与上游逐字节同源，NOTICE.md 有记录）"
+      ]
+    },
+    {
+      "id": "mcp-put-delete-version-requirement",
+      "source_id": "tampermonkey-mcp",
+      "file": "README.md",
+      "needles": [
+        "Tampermonkey Editors 1.0.6+ and Tampermonkey 5.6+",
+        "tampermonkey_put"
+      ],
+      "claims": [
+        "references/mcp/deployment.md（put/delete 版本要求）",
+        "NOTICE.md"
+      ]
+    },
+    {
+      "id": "tm-run-at-default-comment",
+      "source_id": "types-tampermonkey",
+      "file": "index.d.ts",
+      "needles": [
+        "Never null, defaults to document-idle"
+      ],
+      "claims": [
+        "references/runtime/tampermonkey-vs-scriptcat.md（TM 默认 document-idle 判据）",
+        "references/header/metadata.md"
+      ]
+    }
+  ]
+}

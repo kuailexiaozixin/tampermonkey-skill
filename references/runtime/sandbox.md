@@ -141,6 +141,18 @@ console.log(window.pageVariable);  // Direct access
 - Persistent storage
 - CSP bypass
 
+#### Tampermonkey vs ScriptCat: two differences that break scripts
+
+1. **Missing `@grant` line.** Tampermonkey treats a script with no `@grant` line like
+   `@grant none` (page context). ScriptCat treats it like any other grant — the script is
+   **sandboxed** (`src/app/service/content/exec_script.ts`: the no-sandbox branch is taken
+   only when `grantSet.has("none")`). A script that reads page globals without
+   `unsafeWindow` runs under Tampermonkey but throws/returns undefined under ScriptCat.
+2. **`unsafeWindow` under `@grant none`.** ScriptCat injects nothing in no-grant mode, so
+   `unsafeWindow` does not exist there — referencing it throws `ReferenceError`
+   (official skill: "`@grant none` … **no `unsafeWindow`**"; it only exists inside the
+   sandbox, i.e. with any grant other than `none` or with no `@grant` line at all).
+
 ---
 
 ### Firefox: cloneInto and exportFunction

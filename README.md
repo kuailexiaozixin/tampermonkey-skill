@@ -15,18 +15,25 @@
 tampermonkey/
 ├── SKILL.md          # 技能入口（name: tampermonkey），含完整工作流
 ├── examples/
-│   ├── 网页导出.user.js                  # 实战成品：把网页导出为干净 Markdown/HTML
-│   └── youtube-timestamp-bookmarker.user.js  # YouTube 时间戳书签示例
+│   └── 网页导出.user.js                # 实战成品：把网页导出为干净 Markdown/HTML
 ├── references/       # 按主题文件夹存放，每篇一个子主题、可精确检索
-│   ├── api/          # GM API 参考（10 篇）：async/sync/storage/cookies/tabs/audio/dom-ui/http-requests/web-requests/scriptcat-api
+│   ├── api/          # GM API 参考（10 篇）：async/sync/storage/cookies/tabs/audio/
+│   │                 #   dom-ui/http-requests/web-requests + scriptcat-api（ScriptCat 专属）
 │   ├── header/       # 脚本头部（4 篇）：metadata/header-tags/url-matching/versioning
-│   ├── patterns/     # 代码模式（2 篇）：common 常用模式、advanced 高级技巧与最佳实践
-│   ├── runtime/      # 运行环境（2 篇）：sandbox 沙箱、compatibility 跨浏览器
+│   ├── patterns/     # 代码模式（2 篇）：common 常用模式、advanced 高级技巧
+│   ├── runtime/      # 运行环境（3 篇）：sandbox 沙箱、compatibility 跨浏览器、
+│   │                 #   tampermonkey-vs-scriptcat.md（TM 与 ScriptCat 差异对照，带判据）
 │   ├── quality/      # 质量与调试（3 篇）：debugging/pitfalls/security
 │   ├── mcp/          # MCP 部署（1 篇）：deployment 架构与工具
+│   ├── guide/        # 油猴教程学习指南全量镜像（scriptscat/tampermonkey-learn-guide，
+│   │                 #   95 篇正文 + 配图；来源与许可见 NOTICE.md）
+│   ├── guide-index.md # 上述镜像的路由索引（自研，95 条目按栏目分组）
 │   └── typescript.md # TypeScript 开发
-├── scripts/          # analyze_page / generate-userscript / validate-userscript
-└── templates/        # basic / advanced / spa-compatible 三种脚本模板
+├── scripts/          # analyze_page / generate-userscript / validate-userscript / sync_upstream
+├── templates/        # basic / advanced / spa-compatible 三种脚本模板
+├── manifest.json     # 上游跟踪台账（来源清单 + 锚点符号表）
+├── NOTICE.md         # 来源、许可状态与搬运面归属
+└── SYNCLOG.md        # 上游同步日志（每次同步追加一行）
 ```
 
 ## 快速开始
@@ -35,6 +42,14 @@ tampermonkey/
 2. **编写**：从 `templates/` 模板起步，用 `scripts/generate-userscript.sh` 生成骨架；GM API 参考见 `references/api/`。
 3. **调试**：用 `scripts/validate-userscript.sh` 校验元数据、权限声明与安全问题。
 4. **部署**：启动 Tampermonkey MCP（`tampermonkey-mcp --transport=http --port=4001`），用 `tampermonkey_put`/`patch` 全自动安装/更新，详见 `references/mcp/deployment.md`。
+
+## 上游跟踪与许可
+
+`references/guide/`、`scripts/analyze_page.js`、部分头部标签表与判据引文来自第三方仓库，
+来源与许可状态逐条记录在 [NOTICE.md](NOTICE.md)。
+上游更新检测：`python scripts/sync_upstream.py --check`（只报漂移不写盘）；
+锚点校验：`python scripts/sync_upstream.py --anchors`（离线，验证 18 条断言在上游现况里仍成立）。
+同步机制说明见 `SKILL.md` 第 11 节。
 
 ## 相关
 

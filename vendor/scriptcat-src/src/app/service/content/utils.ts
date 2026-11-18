@@ -1,0 +1,340 @@
+import type { SCMetadata, ScriptRunResource, TScriptInfo } from "@App/app/repo/scripts";
+import type { ScriptFunc } from "./types";
+import type { ScriptLoadInfo } from "../service_worker/types";
+import { DefinedFlags } from "../service_worker/runtime.consts";
+import { sourceMapTo } from "@App/pkg/utils/utils";
+import { ScriptEnvTag } from "@Packages/message/consts";
+import { embeddedPatternCheckerString, type EmbeddedURLRuleEntry, type URLRuleEntry } from "@App/pkg/utils/url_matcher";
+import { parseResourceDeclaration } from "@App/pkg/utils/resource";
+import { getGrantCandidates } from "./gm_api/grant";
+import { pickPageLoadScriptFields } from "./page_load_contract";
+
+export type CompileScriptCodeResource = {
+  name: string;
+  code: string;
+  require: Array<{ url: string; content: string }>;
+  isContextMenu: boolean;
+};
+
+// 参考了tm的实现
+export const waitBody = (callback: () => void) => {
+  // 只读取一次 document，避免重复访问 getter
+  let doc: Document | null = document;
+
+  // body 已存在，直接执行回调
+  if (doc.body) {
+    try {
+      callback();
+    } catch {
+      // 屏蔽错误，防止脚本报错导致后续脚本无法执行
+    }
+    return;
+  }
+
+  let handler: ((this: Document, ev: Event) => void) | null = function () {
+    // 通常只需等待 body 就绪
+    // 兼容少数页面在加载过程中替换 document 的情况
+    if (this.body || document !== this) {
+      // 确保只清理一次，防止因页面代码骑劫使移除失败后反复触发
+      if (handler !== null) {
+        this.removeEventListener("load", handler, false);
+        this.removeEventListener("DOMNodeInserted", handler, false);
+        this.removeEventListener("DOMContentLoaded", handler, false);
+        handler = null; // 释放引用，便于 GC
+
+        // 兼容 document 被替换时重新执行
+        waitBody(callback);
+      }
+    }
+  };
+
+  // 注意：避免使用 EventListenerObject
+  // 某些页面会 hook 事件 API，导致EventListenerObject的监听器或会失灵
+  doc.addEventListener("load", handler, false);
+  doc.addEventListener("DOMNodeInserted", handler, false);
+  doc.addEventListener("DOMContentLoaded", handler, false);
+
+  doc = null; // 释放引用，便于 GC
+};
+
+// 根据ScriptRunResource获取require的资源
+export function getScriptRequire(scriptRes: ScriptRunResource): CompileScriptCodeResource["require"] {
+  const resourceArray = new Array<{ url: string; content: string }>();
+  const resource = scriptRes.resourceByType?.require || scriptRes.resource;
+  if (Array.isArray(scriptRes.metadata.require)) {
+    for (const val of scriptRes.metadata.require) {
+      const res = resource[val];
+      if (res) {
+        resourceArray.push({ url: res.url, content: res.content });
+      }
+    }
+  }
+  return resourceArray;
+}
+
+/**
+ * 构建unwrap脚本运行代码
+ * @see {@link ExecScript}
+ * @param scriptRes
+ * @param scriptCode
+ * @returns
+ */
+export function compileScriptletCode(
+  scriptRes: ScriptRunResource,
+  scriptCode: string,
+  scriptUrlPatterns: URLRuleEntry[]
+): string {
+  scriptCode = scriptCode ?? scriptRes.code;
+  const requireArray = getScriptRequire(scriptRes);
+  const requireCode = requireArray.map((r) => r.content).join("\n;");
+  // 在window[flag]注册一个空脚本让原本的脚本管理器知道并记录脚本成功执行
+  const reducedPatterns = scriptUrlPatterns.map(({ ruleType, ruleContent }) => ({
+    ruleType,
+    ruleContent,
+  })) satisfies EmbeddedURLRuleEntry[];
+  const urlCondition = embeddedPatternCheckerString("location.href", JSON.stringify(reducedPatterns));
+  const codeBody = `if(${urlCondition}){\n${requireCode}\n${scriptCode}\nwindow['${scriptRes.flag}']=function(){};\n}`;
+  return `${codeBody}${sourceMapTo(`${scriptRes.name}.user.js`)}\n`;
+}
+
+/**
+ * 构建脚本运行代码
+ * @see {@link ExecScript}
+ * @param scriptRes
+ * @param scriptCode
+ * @returns
+ */
+export function compileScriptCode(scriptRes: ScriptRunResource, scriptCode?: string): string {
+  scriptCode = scriptCode ?? scriptRes.code;
+  const requireArray = getScriptRequire(scriptRes);
+  return compileScriptCodeByResource({
+    name: scriptRes.name,
+    code: scriptCode,
+    require: requireArray,
+    isContextMenu: isContextMenuScript(scriptRes.metadata),
+  });
+}
+
+const addTryCatch = (code: string) =>
+  `
+      try {
+        {{functionBody}}
+      } catch (e) {
+        if (e.message && e.stack) {
+            console.error("ERROR: Execution of script '" + arguments[1] + "' failed! " + e.message);
+            console.log(e.stack);
+        } else {
+            console.error(e);
+        }
+      }
+  `
+    .trim()
+    .replace(/[\r\n]/g, "")
+    .replace(/\s+/g, " ")
+    .replace("{{functionBody}}", () => code);
+
+export function compileScriptCodeByResource(resource: CompileScriptCodeResource): string {
+  const requireCode = resource.require.map((r) => r.content).join("\n;");
+  const preCode = requireCode; // 不需要 async 封装
+  let code = resource.code; // 需要 async 封装, 可top-level await
+  // context 和 name 以unnamed arguments方式导入。避免代码能直接以变量名存取
+  // this = context: globalThis
+  // arguments = [named: Object, scriptName: string]
+  // 使用sandboxContext时，arguments[0]为undefined, this.$则为一次性Proxy变量，用于全域拦截context
+  // 非沙盒环境时，先读取 arguments[0]，因此不会读取页面环境的 this.$
+  // 在UserScripts API中，由于执行不是在物件导向里呼叫，使用arrow function的话会把this改变。须使用 .call(this) [ 或 .bind(this)() ]
+
+  if (resource.isContextMenu) {
+    // 脚本体整体延后到菜单回调里执行，它自己的 GM_registerMenuCommand 也随之推迟到点击后才注册
+    code = `GM_registerMenuCommand((${JSON.stringify(resource.name)}), ()=>{\n${code}\n}, {nested:false});\n`;
+  }
+
+  const joinedCode = [
+    "with(arguments[0]||this.$){",
+    `${preCode}`,
+    "return(async function(){",
+    `${code}`,
+    "}).call(this);}",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const codeBody = addTryCatch(joinedCode);
+  return `${codeBody}${sourceMapTo(`${resource.name}.user.js`)}\n`;
+}
+
+// 通过脚本代码编译脚本函数
+export function compileScript(code: string): ScriptFunc {
+  return <ScriptFunc>new Function(code);
+}
+
+/**
+ * 将脚本函数编译为注入脚本代码
+ * @param script
+ * @param scriptCode
+ * @param [autoDeleteMountFunction=false] 是否自动删除挂载的函数
+ */
+export function compileInjectScript(
+  script: ScriptRunResource,
+  scriptCode: string,
+  autoDeleteMountFunction: boolean = false
+): string {
+  return compileInjectScriptByFlag(script.flag, scriptCode, autoDeleteMountFunction);
+}
+
+export function compileInjectScriptByFlag(
+  flag: string,
+  scriptCode: string,
+  autoDeleteMountFunction: boolean = false
+): string {
+  const autoDeleteMountCode = autoDeleteMountFunction ? `try{delete window['${flag}']}catch(e){}` : "";
+  return `window['${flag}'] = function(){${autoDeleteMountCode}${scriptCode}}`;
+}
+
+/**
+ * 脚本加载信息。（Inject/Content环境用，避免过多不必要信息公开，减少页面加载信息存储量）
+ */
+export const trimScriptInfo = (script: ScriptLoadInfo): TScriptInfo => {
+  // --- 处理 resource ---
+  // 由于不需要 complie code, resource 只用在 GM_getResourceURL 和 GM_getResourceText
+  const resource = {} as Record<string, { base64?: string; content: string; contentType: string }>;
+  const requireCssResource = {} as Record<string, { base64?: string; content: string; contentType: string }>;
+  const resourceByType = script.resourceByType;
+  const resourceResources = resourceByType?.resource || script.resource;
+  const requireCssResources = resourceByType?.["require-css"] || script.resource;
+  for (const name of script.metadata["require-css"] || []) {
+    const res = requireCssResources[name];
+    if (res) {
+      requireCssResource[name] = { base64: res.base64, content: res.content, contentType: res.contentType };
+    }
+  }
+  if (hasResourceGrant(script.metadata)) {
+    for (const name of getDeclaredResourceNames(script.metadata)) {
+      const res = resourceResources[name];
+      if (res) {
+        resource[name] = { base64: res.base64, content: res.content, contentType: res.contentType };
+      }
+    }
+  }
+  // --- 处理 resource ---
+  // pageLoad 跨上下文只允许显式列出的字段，新增内部字段不会自动进入页面桥。
+  return pickPageLoadScriptFields(script, {
+    resource,
+    requireCssResource,
+    code: "",
+  });
+};
+
+/**
+ * 将脚本函数编译为预注入脚本代码
+ */
+export function compilePreInjectScript(
+  script: ScriptLoadInfo,
+  scriptCode: string,
+  autoDeleteMountFunction: boolean = false
+): string {
+  const scriptEnvTag = isInjectIntoContent(script.metadata) ? ScriptEnvTag.content : ScriptEnvTag.inject;
+  const eventNamePrefix = `evt${process.env.SC_RANDOM_KEY}.${scriptEnvTag}`; // 仅用于early-start初始化
+  const flag = `${script.flag}`;
+  const scriptInfo = trimScriptInfo(script);
+  const scriptInfoJSON = `${JSON.stringify(scriptInfo)}`;
+  const autoDeleteMountCode = autoDeleteMountFunction ? `try{delete window['${flag}']}catch(e){}` : "";
+  const evScriptLoad = `${eventNamePrefix}${DefinedFlags.scriptLoadComplete}`;
+  const evEnvLoad = `${eventNamePrefix}${DefinedFlags.envLoadComplete}`;
+  return `window['${flag}'] = function(){${autoDeleteMountCode}${scriptCode}};
+{
+  let o = { cancelable: true, detail: { scriptFlag: '${flag}', scriptInfo: (${scriptInfoJSON}) } },
+  c = typeof cloneInto === "function" ? cloneInto(o, performance) : o,
+  f = () => performance.dispatchEvent(new CustomEvent('${evScriptLoad}', c)),
+  needWait = f();
+  if (needWait) performance.addEventListener('${evEnvLoad}', f, { once: true });
+}
+`;
+}
+
+export function addStyle(css: string): HTMLStyleElement {
+  const dom = document.createElement("style");
+  dom.textContent = css;
+  if (document.head) {
+    return document.head.appendChild(dom);
+  }
+  return document.documentElement.appendChild(dom);
+}
+
+export function addStyleSheet(css: string): CSSStyleSheet {
+  // see https://unarist.hatenablog.com/entry/2020/07/06/012540
+  const sheet = new CSSStyleSheet();
+  // it might return as Promise
+  sheet.replaceSync(css);
+  // adoptedStyleSheets is FrozenArray so it has to be re-assigned.
+  document.adoptedStyleSheets = document.adoptedStyleSheets.concat(sheet);
+  return sheet;
+}
+
+export function metadataBlankOrTrue(metadata: SCMetadata, key: string): boolean {
+  const s = metadata[key]?.[0];
+  return s === "" || s === "true";
+}
+
+export function isContextMenuScript(metadata: SCMetadata): boolean {
+  return metadata["run-at"]?.[0] === "context-menu";
+}
+
+export function isEarlyStartScript(metadata: SCMetadata): boolean {
+  return metadataBlankOrTrue(metadata, "early-start") && metadata["run-at"]?.[0] === "document-start";
+}
+
+export function isScriptletUnwrap(metadata: SCMetadata): boolean {
+  return metadataBlankOrTrue(metadata, "unwrap");
+}
+
+export function isInjectIntoContent(metadata: SCMetadata): boolean {
+  return metadata["inject-into"]?.[0] === "content";
+}
+
+const resourceGrantNames = new Set([
+  "GM_getResourceText",
+  "GM_getResourceURL",
+  "GM.getResourceText",
+  "GM.getResourceUrl",
+]);
+
+const getDeclaredResourceNames = (metadata: SCMetadata): Set<string> => {
+  const names = new Set<string>();
+  for (const value of metadata.resource || []) {
+    const declaration = parseResourceDeclaration(value);
+    if (declaration) {
+      names.add(declaration.name);
+    }
+  }
+  return names;
+};
+
+const hasResourceGrant = (metadata: SCMetadata): boolean => {
+  const grants = new Set(metadata.grant || []);
+  if (grants.has("none") && !isContextMenuScript(metadata)) {
+    return false;
+  }
+  return [...grants].some((grant) => getGrantCandidates(grant).some((candidate) => resourceGrantNames.has(candidate)));
+};
+
+export const getScriptFlag = (uuid: string) => {
+  // scriptFlag 对同一脚本永远一致。重新开启浏览器也不会变。
+  // 实作内容有待检讨
+  return `#-${uuid}`;
+};
+
+// 监听属性设置
+export function definePropertyListener<T>(obj: any, prop: string, listener: (val: T) => void) {
+  if (obj[prop] !== undefined) {
+    listener(obj[prop]);
+    delete obj[prop];
+    return;
+  }
+  Object.defineProperty(obj, prop, {
+    configurable: true,
+    set: (val: any) => {
+      delete obj[prop]; // 删除 property setter
+      listener(val);
+    },
+  });
+}

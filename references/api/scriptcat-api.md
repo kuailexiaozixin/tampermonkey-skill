@@ -8,7 +8,10 @@
 
 #### @background
 
-声明脚本为后台脚本，在 Service Worker 中运行，无需匹配页面。
+声明脚本为后台脚本。运行环境是 ScriptCat 的 Offscreen 沙箱（架构链 SW → Offscreen → Sandbox，
+`src/app/service/offscreen/` 与 `sandbox/`），不是 Service Worker；没有目标网页的 DOM，
+`GM_getTab` / `GM_saveTab` / `GM_getTabs` 不可用，但 `GM_registerMenuCommand` 可用
+（菜单出现在 ScriptCat 的弹窗）。无需匹配页面，脚本启用与浏览器启动时运行。
 
 ```js
 // ==UserScript==
@@ -19,31 +22,42 @@
 // @connect      api.example.com
 // ==/UserScript==
 
-const resp = await GM.xmlHttpRequest({
-  url: "https://api.example.com/status",
+return new Promise((resolve, reject) => {
+  GM.xmlHttpRequest({
+    url: 'https://api.example.com/status',
+    onload: (res) => resolve(res.status),
+    onerror: () => reject(new Error('request failed')),
+  });
 });
-const data = JSON.parse(resp.responseText);
-if (data.hasUpdate) {
-  GM.notification({ title: "有新更新", text: data.message });
-}
 ```
 
-**注意**：后台脚本无法访问 DOM（没有 document/window），只能使用 GM API。
+**注意**：脚本体被包进 async 函数，同步部分（含顶层 await）跑完即判运行完成，
+之后的 GM 调用不保证生效——异步工作必须 `return` 一个 Promise，并在真正完成时
+resolve/reject。resolve 记成功、reject 记错误（运行状态在脚本列表，输出走 `GM_log`
+或 ScriptCat 日志页；release 版不保存 debug 级）。手动「运行一次」不会调度重试。
 
 #### @crontab
 
-定时执行表达式，配合 `@background` 使用。格式为 6 位 cron：`秒 分 时 日 月 周`。
+定时执行表达式。**不需要 @background**：`src/pkg/utils/script.ts` 中只要出现 `@crontab`
+就把脚本判为定时类型，且该判定优先于 `@background`。格式按 `src/pkg/utils/cron.ts`：
+支持 5 位 `分 时 日 月 周`（推荐）与 6 位含秒 `秒 分 时 日 月 周`（不推荐——
+后台定时做不到秒级准确，且额外耗性能）。
 
 ```js
-// @background
-// @crontab      0 0 9 * * *        // 每天 9:00:00
-// @crontab      0 */30 * * * *     // 每 30 分钟
-// @crontab      0 0 9 * * 1-5      // 工作日 9:00
-// @crontab      0 0 8,12,18 * * *  // 每天 8:00、12:00、18:00
-// @crontab      once 2025-12-31 00:00:00  // 一次性，指定时间
+// @crontab      0 9 * * *           // 每天 9:00（5 位，推荐）
+// @crontab      */30 * * * *        // 每 30 分钟（5 位）
+// @crontab      0 9 * * 1-5         // 工作日 9:00（5 位）
+// @crontab      * * once * *        // 每天至多一次（once 扩展）
+// @crontab      * once(9-17) * * *  // 9-17 点每小时至多一次
 ```
 
-每次触发时脚本重新执行。脚本执行完毕后自动回收。
+只写一行 `@crontab`：多行时运行期每行都会调度，但安装校验与脚本列表只取第一行，
+任何一行解析失败会停掉该脚本的全部定时任务。`once` 表示该字段周期内至多跑一次，
+周期按运行**开始**时刻计（失败的运行也算已用，需在周期内重试请 reject 一个 CATRetryError）；
+`once(expr)` 只在 expr 的取值里挑第一次命中。用外部 cron 工具验证表达式时，
+把 `once` 换成 `*`、`once(expr)` 换成 expr。
+
+每次触发时脚本重新执行，执行完毕后自动回收。
 
 #### CATRetryError
 
@@ -67,7 +81,8 @@ try {
 - `new CATRetryError(message, seconds)` — N 秒后重试
 - `new CATRetryError(message, date)` — 指定时间重试
 
-最小重试间隔 5 秒。
+重试队列每 5 秒检查一次，所以重试可能比请求的时间最晚到 5 秒；运行时长加重试间隔
+要短于 cron 周期，否则两次运行会重叠。判据：官方 background.md。
 
 ---
 
@@ -77,8 +92,13 @@ try {
 
 注册带输入框的菜单项。用户点击后弹出输入对话框。
 
+`CAT_registerMenuInput` / `CAT_unregisterMenuInput` 需要**单独声明 grant**，
+`@grant GM_registerMenuCommand` 不覆盖它们（官方 check.mjs 判据：只给 GM_registerMenuCommand
+时报 `error grant-missing: CAT_registerMenuInput is used but not granted`）。
+
 ```js
-// @grant GM_registerMenuCommand  // 共用同一个 grant
+// @grant CAT_registerMenuInput
+// @grant CAT_unregisterMenuInput
 
 CAT_registerMenuInput("设置延迟时间", (value) => {
   console.log("用户输入:", value);
@@ -93,6 +113,8 @@ CAT_registerMenuInput("设置延迟时间", (value) => {
 // 取消注册
 CAT_unregisterMenuInput(menuId);
 ```
+
+（`CAT_unregisterMenuInput` 在 d.ts 里是 `GM_unregisterMenuCommand` 的别名。）
 
 #### CAT_userConfig
 
@@ -194,9 +216,10 @@ CAT_fileStorage("delete", {
 CAT_fileStorage("config");
 ```
 
-**错误码**：
+**错误码**（判据：`scriptcat.d.ts` 的 `CATType.FileStorageError.code`）：
 | code | 含义 |
 |------|------|
+| -1 | 未知错误 |
 | 1 | 存储未配置 |
 | 2 | 配置错误 |
 | 3 | 路径不存在 |
@@ -339,6 +362,75 @@ await CAT.agent.opfs.delete("data/old.txt");
 
 ---
 
+### 其他 ScriptCat 专属元数据
+
+#### @inject-into
+
+取值域 `page`（默认）/ `content`（判据：`SUPPORTED_TAG_VALUES["inject-into"]`、
+`isInjectIntoContent`）。`content` 把脚本放到内容脚本世界：不受页面 CSP 影响，
+但 `unsafeWindow` 不再是页面的 `window`。
+
+```js
+// @inject-into  content
+```
+
+#### UserConfig 配置块
+
+头部之后可放一个 YAML 块，ScriptCat 据此生成设置表单；字段值以
+`GM_getValue("<组>.<键>")` 读取（需 `@grant GM_getValue`），`CAT_userConfig()` 打开表单。
+
+```js
+/* ==UserConfig==
+general:
+  token:
+    title: API token
+    type: text
+    password: true
+  interval:
+    title: 刷新间隔
+    type: number
+    default: 10
+    min: 5
+    max: 60
+    unit: min
+  mode:
+    title: 模式
+    type: select
+    default: fast
+    values: [fast, safe]
+ ==/UserConfig== */
+```
+
+- 组是顶层键，每组一个标签页；`---` 可分成多段 YAML。
+- `type` 取值：`text` / `textarea` / `number` / `checkbox` / `switch` / `select` / `mult-select`；
+  省略时按 default 与 values 推断，单选请显式写 `type: select`。
+- `number` 用 `min`/`max` 约束，`text` 只用 `max` 作最大长度；`mult-select` 的 default 是数组。
+- 读值时把默认值一并传给 `GM_getValue`，不要假定表单 default 已落盘。
+（判据：官方技能 `scriptcat/skills/scriptcat-userscript/references/userconfig.md`。）
+
+---
+
+### 通知与页面信息补充
+
+- `GM_closeNotification(id)` / `GM_updateNotification(id, details)`：ScriptCat 独有
+  （`updateNotification` 在 Firefox 不支持）。`NotificationDetails` 还定义了
+  `progress`（进度）、`buttons`（最多 2 个按钮，`NotificationButton`）、
+  `image`、`silent`、`highlight`、`oncreate` / `ondone` 等字段。
+- `GM_openInTab(url, options)` 的 `OpenTabOptions` 比 Tampermonkey 多 `useOpen`
+  （用 `window.open` 打开 `vscode://`、`m3u8dl://` 之类自定义协议，此模式下其余选项被忽略）
+  与 `pinned`（固定新标签页）；`insert` 取值为 `true`/`1`/`false`/`0`，
+  `incognito` 在 ScriptCat 用 `"split"` 语义。以上均见 `scriptcat.d.ts`。
+- **默认值两端相反**（跨端脚本最容易踩的一处）：ScriptCat 的 `active` 与 `insert`
+  默认都是 `true`（前台打开、插在当前标签后），Tampermonkey 的两者默认都是 `false`
+  （判据：`scriptcat.d.ts` 的 `@default true` 对照 `@types/tampermonkey` 的
+  "default is `false`" 注释）。不显式传值时，同一行调用在两端的落点不同。
+- `GM_info.scriptMetaStr`：头部原文；`GM_info.userLanguage`：ScriptCat 界面语言
+  （如 `zh-CN`），用于本地化脚本自身文案。
+- `CAT_setProxy(rules | string)` / `CAT_clearProxy()`：设置/清除浏览器代理规则；
+  `CAT_click(x, y)`：坐标级真实点击。三者判据均在 `scriptcat.d.ts`，
+  官方技能标注为 **deprecated（正式版已移除，beta 可能回归）**——新脚本不要依赖。
+
+
 ### 完整后台脚本示例
 
 ```js
@@ -380,15 +472,7 @@ try {
 }
 ```
 
----
-
----
-name: scriptcat-dev
-description: 脚本猫/油猴脚本开发助手 — 帮助编写、调试和优化 UserScript 用户脚本。覆盖标准 GM API（兼容 Tampermonkey/Violentmonkey）和 ScriptCat 特有功能（后台脚本、定时任务、Agent API、文件存储）。当用户想写油猴脚本、用户脚本、ScriptCat 脚本或者需要对网页进行自动化修改时使用。
-scripts:
-  - analyze_page.js
-references:
-  - gm_api.md
-  - metadata.md
-  - patterns.md
-  - scriptcat_api.md
+> 后台/定时脚本建议在结尾 `return` 一个 Promise 并在真正完成时 resolve：
+> 同步部分跑完 ScriptCat 就标记运行结束，之后的 GM 调用不保证生效；
+> 手动"运行一次"不会调度 `CATRetryError` 的重试。详见官方技能
+> `scriptcat/skills/scriptcat-userscript`（跟踪源，见 SYNCLOG.md）。

@@ -1,0 +1,370 @@
+import { uuidv4 } from "@App/pkg/utils/uuid";
+import type { SCMetadata, Script, ScriptCode, UserConfig } from "@App/app/repo/scripts";
+import { TrashScriptDAO } from "@App/app/repo/trash_script";
+import {
+  SCRIPT_RUN_STATUS_COMPLETE,
+  SCRIPT_STATUS_DISABLE,
+  SCRIPT_STATUS_ENABLE,
+  SCRIPT_TYPE_BACKGROUND,
+  SCRIPT_TYPE_CRONTAB,
+  SCRIPT_TYPE_NORMAL,
+  ScriptCodeDAO,
+  ScriptDAO,
+} from "@App/app/repo/scripts";
+import type { Subscribe } from "@App/app/repo/subscribe";
+import { SubscribeStatusType, SubscribeDAO } from "@App/app/repo/subscribe";
+import { extractCronExpr } from "./cron";
+import { parseUserConfig } from "./yaml";
+import { t as i18n_t } from "@App/locales/locales";
+import { readRawContent } from "@App/pkg/utils/encoding";
+
+const HEADER_BLOCK = /\/\/[ \t]*==User(Script|Subscribe)==([\s\S]+?)\/\/[ \t]*==\/User\1==/m;
+const META_LINE = /\/\/[ \t]*@(\S+)[ \t]*(.*)$/gm;
+
+export interface MetadataLine {
+  /** 小写归一后的指令名，与 parseMetadata 的取键一致 */
+  tag: string;
+  /** 作者的原始写法，仅供呈现 */
+  name: string;
+  value: string;
+  /** 1 起算的全文行号 */
+  line: number;
+}
+
+const HEADER_OPEN = /^\/\/[ \t]*==User(?:Script|Subscribe)==/;
+
+/**
+ * 带位置的元数据解析：与 parseMetadata 共用 HEADER_BLOCK / META_LINE，
+ * 保证诊断看到的指令集合与运行时实际解析出的完全一致（否则会对着一条运行时根本没读到的行报警）。
+ * parseMetadata 按指令名聚合取值、丢弃位置，这里逐条保留顺序与行号。
+ */
+export function parseMetadataLines(code: string): MetadataLine[] {
+  const block = HEADER_BLOCK.exec(code);
+  if (!block) return [];
+  const headerContent = block[2];
+  const open = HEADER_OPEN.exec(block[0]);
+  if (!open) return [];
+  const headerStart = block.index + open[0].length;
+
+  const lines: MetadataLine[] = [];
+  // META_LINE 的匹配按位置递增，逐段累计换行数即可，无需为每条指令从头数
+  let scanned = 0;
+  let line = 1;
+  let m: RegExpExecArray | null;
+  META_LINE.lastIndex = 0;
+  while ((m = META_LINE.exec(headerContent)) !== null) {
+    const absolute = headerStart + m.index;
+    for (let i = scanned; i < absolute; i++) {
+      if (code.charCodeAt(i) === 10) line += 1;
+    }
+    scanned = absolute;
+    lines.push({ tag: m[1].toLowerCase(), name: m[1], value: m[2]?.trim() ?? "", line });
+  }
+  return lines;
+}
+
+// 从脚本代码抽出Metadata
+export function parseMetadata(code: string): SCMetadata | null {
+  let isSubscribe = false;
+  let headerContent: string;
+  let m: RegExpExecArray | null;
+  if ((m = HEADER_BLOCK.exec(code))) {
+    isSubscribe = m[1] === "Subscribe";
+    headerContent = m[2];
+  } else {
+    return null;
+  }
+  const metadata: SCMetadata = {} as SCMetadata;
+  META_LINE.lastIndex = 0; // 重置正则表达式的lastIndex（用于复用）
+  while ((m = META_LINE.exec(headerContent)) !== null) {
+    const key = m[1].toLowerCase();
+    const val = m[2]?.trim() ?? "";
+    const values = metadata[key] || (metadata[key] = []);
+    values.push(val);
+  }
+  if (!metadata.name || Object.keys(metadata).length < 3) return null;
+  if (!metadata.namespace) metadata.namespace = [""];
+  if (isSubscribe) metadata.usersubscribe = []; // 如果是 user.sub.js, 在 metadata 会有一个额外的 usersubscribe
+  return metadata;
+}
+
+// 下载进度:已接收字节数,以及(若服务端提供 Content-Length)总字节数
+export interface FetchScriptProgress {
+  receivedLength: number;
+  totalLength?: number;
+}
+
+// 未声明 @updateURL/@downloadURL 时，由安装地址推算检查更新用的 meta.js 地址
+export const deriveMetaUrl = (url: string) => url.replace("user.js", "meta.js");
+
+// 从网址取得脚本代码
+export async function fetchScriptBody(
+  url: string,
+  signal?: AbortSignal,
+  onProgress?: (info: FetchScriptProgress) => void
+): Promise<string> {
+  const resp = await fetch(url, {
+    signal,
+    // 以脚本来源作为 referrer(部分站点据此做反盗链);Origin/Accept-Encoding 是
+    // 禁止修改的请求头,浏览器会忽略,故不在此设置,由浏览器自行协商
+    referrer: new URL(url).origin + "/",
+    headers: {
+      "Cache-Control": "no-cache",
+    },
+  });
+  if (resp.status !== 200) {
+    throw new Error("fetch script info failed");
+  }
+  const contentType = resp.headers.get("content-type");
+  if (contentType?.includes("text/html")) {
+    throw new Error("url is html");
+  }
+  // 无进度回调或环境不支持流式读取时,沿用一次性读取(保留原行为)
+  if (!onProgress || !resp.body) {
+    return readRawContent(resp, contentType);
+  }
+  // 流式读取:逐块累加并上报进度,最后合并交给 readRawContent 做编码识别
+  // 压缩响应(gzip/br 等)的 Content-Length 是压缩后大小,而 reader 读到的是解压后字节,
+  // 两者不可比,故此时不报告总大小(交由调用方退回仅显示已接收字节)
+  const contentEncoding = resp.headers.get("content-encoding");
+  const compressed = !!contentEncoding && contentEncoding !== "identity";
+  const totalLength = compressed ? undefined : Number(resp.headers.get("content-length")) || undefined;
+  const reader = resp.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let receivedLength = 0;
+  onProgress({ receivedLength, totalLength });
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    receivedLength += value.length;
+    onProgress({ receivedLength, totalLength });
+  }
+  const merged = new Uint8Array(receivedLength);
+  let position = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, position);
+    position += chunk.length;
+  }
+  return readRawContent(merged, contentType);
+}
+
+// 通过代码解析出脚本基本信息 (不含数据库查询)
+export function parseScriptFromCode(code: string, origin: string, uuid?: string): Script {
+  const metadata = parseMetadata(code);
+  if (!metadata) {
+    throw new Error(i18n_t("script:error_metadata_invalid"));
+  }
+  // 不接受空白name
+  if (!metadata.name?.[0]) {
+    throw new Error(i18n_t("script:error_script_name_required"));
+  }
+  // 可接受空白namespace
+  if (metadata.namespace === undefined) {
+    throw new Error(i18n_t("script:error_script_namespace_required"));
+  }
+  // 可接受空白version
+  let type = SCRIPT_TYPE_NORMAL;
+  if (metadata.crontab !== undefined) {
+    type = SCRIPT_TYPE_CRONTAB;
+    try {
+      extractCronExpr(metadata.crontab[0]);
+    } catch {
+      throw new Error(i18n_t("script:error_cron_invalid", { expr: metadata.crontab[0] }));
+    }
+  } else if (metadata.background !== undefined) {
+    type = SCRIPT_TYPE_BACKGROUND;
+  }
+  let domain = "";
+  let checkUpdateUrl = "";
+  let downloadUrl = origin;
+  if (metadata.updateurl && metadata.downloadurl) {
+    [checkUpdateUrl] = metadata.updateurl;
+    [downloadUrl] = metadata.downloadurl;
+  } else {
+    checkUpdateUrl = deriveMetaUrl(origin);
+  }
+  if (origin.startsWith("http://") || origin.startsWith("https://")) {
+    const u = new URL(origin);
+    domain = u.hostname;
+  }
+  const newUUID = uuid || uuidv4();
+  const config: UserConfig | undefined = parseUserConfig(code);
+  const now = Date.now();
+  return {
+    uuid: newUUID,
+    name: metadata.name[0],
+    author: metadata.author && metadata.author[0],
+    namespace: metadata.namespace[0], // 上面的代码已检查 meta.namespace, 不会为undefined
+    originDomain: domain,
+    origin,
+    checkUpdate: true,
+    checkUpdateUrl,
+    downloadUrl,
+    config,
+    metadata,
+    selfMetadata: {},
+    sort: -1,
+    type,
+    status: SCRIPT_STATUS_DISABLE,
+    runStatus: SCRIPT_RUN_STATUS_COMPLETE,
+    createtime: now,
+    updatetime: now,
+    checktime: now,
+  };
+}
+
+// 通过代码解析出脚本信息 (Script)
+export async function prepareScriptByCode(
+  code: string,
+  origin: string,
+  uuid?: string,
+  override: boolean = false,
+  dao?: ScriptDAO,
+  options?: {
+    byEditor?: boolean; // 是否通过编辑器导入
+    // 仅控制网页来源脚本的身份匹配，不参与安装页 history.back()/window.close() 决策。
+    byWebRequest?: boolean;
+  }
+): Promise<{ script: Script; oldScript?: Script; oldScriptCode?: string; oldInTrash?: boolean }> {
+  dao = dao ?? new ScriptDAO();
+  const script = parseScriptFromCode(code, origin, uuid);
+  let old: Script | undefined;
+  let oldCode: ScriptCode | undefined;
+  if (uuid) {
+    old = await dao.get(uuid);
+  }
+  if (!old && (!uuid || override)) {
+    old = await dao.findByNameAndNamespace(script.name, script.namespace);
+  }
+  if (!old && options?.byWebRequest) {
+    const test = await dao.searchExistingScript(script);
+    if (test.length === 1) {
+      const testCheckUrl = test[0]?.checkUpdateUrl;
+      if (testCheckUrl) {
+        // 尝试下载该脚本的url, 检查是否指向要求脚本
+        try {
+          const code = await fetchScriptBody(testCheckUrl);
+          const metadata = code ? parseMetadata(code) : null;
+          if (metadata && metadata.name![0] === script.name && (metadata.namespace?.[0] || "") === script.namespace) {
+            old = test[0];
+          }
+        } catch {
+          /* empty */
+        }
+      }
+    }
+  }
+  // 所有活跃表查找都落空后，才查回收站：活跃脚本必须优先于回收站条目命中，
+  // 否则一个仍活着的脚本会被误判成「在回收站里」。
+  // 命中则复用它的 uuid —— 新代码写入旧身份，storageName 不变，value 与权限得以保留。
+  // 「移出回收站」无需在此处理：installScript 落库前会先删掉同 uuid 的回收站条目。
+  let oldInTrash = false;
+  let trashDAO: TrashScriptDAO | undefined;
+  if (!old) {
+    trashDAO = new TrashScriptDAO();
+    // 跟随调用方的缓存策略：命中回收站后，后续读取代码可复用本次 OPFS 枚举结果。
+    if (dao.useCache) {
+      trashDAO.enableCache();
+    }
+    const trashed = await trashDAO.findByNameAndNamespace(script.name, script.namespace);
+    if (trashed) {
+      old = trashed;
+      oldInTrash = true;
+    }
+  }
+  const hasGrantConflict = (metadata: SCMetadata | undefined | null) =>
+    metadata?.grant?.includes("none") && metadata?.grant?.some((s: string) => s.startsWith("GM"));
+  const hasDuplicatedMetaline = (metadata: SCMetadata | undefined | null) => {
+    if (metadata) {
+      for (const list of Object.values(metadata)) {
+        if (list && new Set(list).size !== list.length) return true;
+      }
+    }
+  };
+  if (options?.byEditor && hasGrantConflict(script.metadata) && (!old || !hasGrantConflict(old.metadata))) {
+    throw new Error(i18n_t("script:error_grant_conflict"));
+  }
+  if (options?.byEditor && hasDuplicatedMetaline(script.metadata) && (!old || !hasDuplicatedMetaline(old.metadata))) {
+    throw new Error(i18n_t("script:error_metadata_line_duplicated"));
+  }
+  if (old) {
+    if (
+      (old.type === SCRIPT_TYPE_NORMAL && script.type !== SCRIPT_TYPE_NORMAL) ||
+      (script.type === SCRIPT_TYPE_NORMAL && old.type !== SCRIPT_TYPE_NORMAL)
+    ) {
+      throw new Error(i18n_t("script:error_script_type_mismatch"));
+    }
+    const code =
+      oldInTrash && trashDAO ? await trashDAO.getCode(old.uuid) : (await new ScriptCodeDAO().get(old.uuid))?.code;
+    if (code === undefined) {
+      throw new Error(i18n_t("script:error_old_script_code_missing"));
+    }
+    oldCode = { uuid: old.uuid, code };
+    const { uuid, createtime, lastruntime, error, sort, selfMetadata, subscribeUrl, checkUpdate, status } = old;
+    Object.assign(script, {
+      uuid,
+      createtime,
+      lastruntime,
+      error,
+      sort,
+      selfMetadata: selfMetadata || {},
+      subscribeUrl,
+      checkUpdate,
+      status,
+    });
+  } else {
+    // 前台脚本默认开启
+    if (script.type === SCRIPT_TYPE_NORMAL) {
+      script.status = SCRIPT_STATUS_ENABLE;
+    }
+    script.checktime = Date.now();
+  }
+  return { script, oldScript: old, oldScriptCode: oldCode?.code, oldInTrash };
+}
+
+// 通过代码解析出脚本信息 (Subscribe)
+export async function prepareSubscribeByCode(
+  code: string,
+  url: string
+): Promise<{ subscribe: Subscribe; oldSubscribe?: Subscribe }> {
+  /*
+  // ==UserSubscribe==
+  // @name         xxx
+  // @description  订阅xxx系列脚本
+  // @version      0.1.0
+  // @author       You
+  // @connect      www.baidu.com
+  // @scriptUrl    https://script.tampermonkey.net.cn/48.user.js
+  // @scriptUrl    https://script.tampermonkey.net.cn/49.user.js
+  // ==/UserSubscribe==
+  */
+  const dao = new SubscribeDAO();
+  const metadata = parseMetadata(code);
+  if (!metadata) {
+    throw new Error(i18n_t("script:error_metadata_invalid"));
+  }
+  if (metadata.name === undefined) {
+    throw new Error(i18n_t("script:error_subscribe_name_required"));
+  }
+  const now = Date.now();
+  const subscribe: Subscribe = {
+    url, // url of the user.sub.js
+    name: metadata.name[0],
+    code,
+    author: (metadata.author && metadata.author[0]) || "",
+    scripts: {},
+    metadata: metadata,
+    status: SubscribeStatusType.enable,
+    createtime: now,
+    updatetime: now,
+    checktime: now,
+  };
+  const old = await dao.get(url); // 已存在 -> 把之前的 scripts, createtime, status 抽出来
+  if (old) {
+    const { url, scripts, createtime, status } = old;
+    // url 是一样的；Subscribe 不使用 name 和 namespace 判断，仅使用 url 作唯一键
+    Object.assign(subscribe, { url, scripts, createtime, status });
+  }
+  return { subscribe, oldSubscribe: old };
+}
