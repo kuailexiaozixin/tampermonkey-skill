@@ -164,20 +164,22 @@ URL 匹配模式，决定脚本在哪些页面运行。语法：`scheme://host/p
 // @noframes
 ```
 
-#### @run-in（ScriptCat）
-限定脚本（页面脚本与后台/定时脚本均生效）运行在哪些浏览器上下文。
-取值域见 `SUPPORTED_TAG_VALUES["run-in"]`：`all`（默认，不写即全部）、
-`normal-tabs`、`incognito-tabs`——**没有** `content` / `page` / `background` 取值，
-也没有 Firefox 容器 `container-id-N` 写法（TM 的 header-tags.md 保留了容器写法但本轮无法证实，
-见 runtime/tampermonkey-vs-scriptcat.md 的缺口记录）。
-判据：`src/app/service/service_worker/runtime.ts` `shouldSkipPageLoadScript()` 把值与
-`incognito-tabs` / `normal-tabs` 逐字比较；`src/app/service/sandbox/utils.ts`
-`backgroundRunInAllowed()` 管后台/定时脚本的同名判断。
+#### @run-in（两端都有，取值域不同）
+限定脚本运行在哪些浏览器上下文。Tampermonkey 官方文档自 v5.3+ 起收录该标签；
+ScriptCat 的元数据白名单同样消费 `run-in`（判据：`SUPPORTED_METADATA_TAGS` 含 `"run-in"`）。
+**取值域按端不同**：
+- ScriptCat：`all`（默认）/ `normal-tabs` / `incognito-tabs`
+  （判据：`SUPPORTED_TAG_VALUES["run-in"]`；`service_worker/runtime.ts` 的
+  `shouldSkipPageLoadScript()` 把值与 `incognito-tabs` / `normal-tabs` 逐字比较，
+  `sandbox/utils.ts` 的 `backgroundRunInAllowed()` 管后台/定时脚本的同名判断）。
+- Tampermonkey：`normal-tabs` / `incognito-tabs`（本地 header-tags.md 记载；
+  另有 Firefox 容器 `container-id-N` 写法，本轮未证实，见
+  runtime/tampermonkey-vs-scriptcat.md 缺口记录）。
 
 ```js
-// @run-in       normal-tabs      // 只在普通窗口
-// @run-in       incognito-tabs   // 只在隐身窗口
-// @run-in       all              // 全部（缺省同义）
+// @run-in       normal-tabs      // 只在普通窗口（两端同义）
+// @run-in       incognito-tabs   // 只在隐身窗口（两端同义）
+// @run-in       all              // 全部（ScriptCat 缺省同义）
 ```
 ### 更新机制
 

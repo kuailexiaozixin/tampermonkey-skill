@@ -50,21 +50,26 @@
 | `@early-start` + `CAT_scriptLoaded()` | 官方 api.md；`gm_api.ts` `CAT_scriptLoaded` 返回 `loadScriptPromise` |
 | `@inject-into content`（注入世界切换；`page` 为默认） | `src/app/service/content/utils.ts` `isInjectIntoContent` |
 | `@storageName` 跨脚本共享存储 + `GM_addValueChangeListener` 的 `remote=true` 通道 | 官方 api.md |
-| `@run-in normal-tabs / incognito-tabs / all` 限定后台脚本运行上下文 | `SUPPORTED_TAG_VALUES["run-in"]`；`src/app/service/sandbox/utils.ts` `backgroundRunInAllowed` |
 | `CAT_setProxy` / `CAT_clearProxy` / `CAT_click(x,y)` / `CAT_fileStorage` / `CAT_fetchDocument` / `CAT_fetchBlob` / `CAT_createBlobUrl` / `CAT_registerMenuInput` / `CAT_userConfig` / `CAT.agent.*` | `src/types/scriptcat.d.ts`（签名以该文件为准） |
 | `GM_closeNotification` / `GM_updateNotification`（Firefox 不支持 update） | 官方 api.md |
 | `GM_info.scriptHandler === "ScriptCat"`、`userLanguage`、`scriptMetaStr` | 官方 api.md |
 | `==UserConfig==` YAML 配置块（表单值走 `GM_getValue("group.key")`） | 官方 userconfig.md |
 | `GM_download` 的 `native`/`browser` 模式差异（native 查 `@connect`，未声明的主机**问用户**而非直接拒绝） | 官方 api.md |
 
-TM 专属（ScriptCat 不实现）：`window.onurlchange` grant 在两端都有，但 TM 的
-`@sandbox` 三态（raw/JavaScript/DOM，v4.18+）与 Firefox 容器类 `@run-in container-id-*`
-写法在 ScriptCat 白名单里**不存在**——见下条缺口。
+两端共有但取值域不同：`@run-in` 在 TM 官方文档 v5.3+ 起收录（`normal-tabs` /
+`incognito-tabs`，另记 Firefox 容器写法），ScriptCat 白名单取值为
+`all` / `normal-tabs` / `incognito-tabs`（判据：`SUPPORTED_TAG_VALUES["run-in"]`、
+`shouldSkipPageLoadScript()`、`backgroundRunInAllowed()`）。
+
+TM 有而 ScriptCat 白名单没有的标签：`@sandbox` 三态（raw/JavaScript/DOM，v4.18+）
+与 Firefox 容器类 `@run-in container-id-*` 写法（判据：`SUPPORTED_METADATA_TAGS`
+不含 `sandbox`）——见下条缺口。
 
 ## 5. 缺口与已查过的层（不得当作"不支持"的证据）
 
 - **`@run-in container-id-N`**：`references/header/header-tags.md` 保留此写法
-  （v5.3+ 起）；本轮验证时 tampermonkey.net 文档页为需 JS 渲染的 SPA，直连、
+  （v5.3+ 起，官方文档 TOC 已确认收录该标签）；tampermonkey.net 文档页为需 JS
+  渲染的 SPA，正文四层取不到，
   Wayback 存档、changelog.php、faq.php 四层都取不到该标签正文，本地亦无源码可查，
   **未能证实亦未证伪**。引用前按"未证实"处理；如需坐实，用真实 Tampermonkey
   实例装一份带该行的脚本观察（属浏览器实测，本技能未执行）。

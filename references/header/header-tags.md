@@ -196,6 +196,8 @@ When to inject the script.
 #### @run-in (v5.3+)
 
 Control browser context (normal vs incognito tabs).
+Shared with ScriptCat — but its value domain differs per engine; see
+`runtime/tampermonkey-vs-scriptcat.md` (ScriptCat: all / normal-tabs / incognito-tabs).
 
 ```javascript
 // Only in normal tabs
